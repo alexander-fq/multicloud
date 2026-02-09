@@ -1,70 +1,80 @@
-/**
- * Server Entry Point
- * Starts the HTTP server and initializes the application
- *
- * This file is separate from app.js to allow app.js to be
- * imported in tests without starting the server.
- */
+require('dotenv').config();
+const app = require('./src/app');
+const { getDatabaseService, getAuthService, getProvider } = require('./src/services/factory');
 
-const { app, initializeDatabase } = require('./src/app');
-
-/**
- * Get port from environment or use default
- */
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
-const NODE_ENV = process.env.NODE_ENV || 'development';
 
-/**
- * Start server
- */
 async function startServer() {
   try {
-    // Initialize database connection
-    console.log('[Server] Initializing database connection...');
-    await initializeDatabase();
+    console.log('🚀 Starting GovTech Cloud Migration Platform...');
+    console.log(`☁️  Cloud Provider: ${getProvider().toUpperCase()}`);
+    console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
 
-    // Start HTTP server
+    // Test database connection
+    console.log('📊 Testing database connection...');
+    const db = getDatabaseService();
+    const dbConnected = await db.testConnection();
+
+    if (!dbConnected) {
+      console.warn('⚠️  Database connection failed, but server will continue');
+    } else {
+      console.log('✅ Database connected successfully');
+      const stats = await db.getPoolStats();
+      console.log(`   Pool stats: ${stats.total} total, ${stats.idle} idle, ${stats.waiting} waiting`);
+    }
+
+    // Verify cloud credentials
+    console.log('🔐 Verifying cloud credentials...');
+    const auth = getAuthService();
+    const credsValid = await auth.verifyCredentials();
+
+    if (!credsValid) {
+      console.warn('⚠️  Cloud credentials verification failed');
+      console.warn('   Some features may not work correctly');
+    } else {
+      console.log('✅ Cloud credentials verified');
+      const identity = await auth.getCurrentIdentity();
+      console.log(`   Account: ${identity.account || identity.userId}`);
+    }
+
+    // Start server
     const server = app.listen(PORT, HOST, () => {
-      console.log('='.repeat(70));
-      console.log(`[Server] GovTech Tramites API`);
-      console.log(`[Server] Environment: ${NODE_ENV}`);
-      console.log(`[Server] Server running on http://${HOST}:${PORT}`);
-      console.log(`[Server] API Base URL: http://${HOST}:${PORT}/api/v1`);
-      console.log(`[Server] Health Check: http://${HOST}:${PORT}/api/v1/health`);
-      console.log('='.repeat(70));
-    });
-
-    // Handle server errors
-    server.on('error', (error) => {
-      if (error.code === 'EADDRINUSE') {
-        console.error(`[Server] Error: Port ${PORT} is already in use`);
-        process.exit(1);
-      } else {
-        console.error('[Server] Server error:', error);
-        process.exit(1);
-      }
+      console.log('');
+      console.log('✅ Server is running!');
+      console.log(`   URL: http://${HOST}:${PORT}`);
+      console.log(`   Health: http://${HOST}:${PORT}/api/health`);
+      console.log(`   Info: http://${HOST}:${PORT}/api/info`);
+      console.log('');
+      console.log('📚 Ready to handle requests...');
     });
 
     // Graceful shutdown
-    const shutdown = async (signal) => {
-      console.log(`\n[Server] ${signal} received. Closing server...`);
-
-      server.close(() => {
-        console.log('[Server] HTTP server closed');
+    process.on('SIGTERM', async () => {
+      console.log('\n🛑 SIGTERM received, shutting down gracefully...');
+      server.close(async () => {
+        console.log('   Server closed');
+        await db.close();
+        console.log('   Database connections closed');
+        process.exit(0);
       });
-    };
+    });
 
-    process.on('SIGTERM', () => shutdown('SIGTERM'));
-    process.on('SIGINT', () => shutdown('SIGINT'));
+    process.on('SIGINT', async () => {
+      console.log('\n🛑 SIGINT received, shutting down gracefully...');
+      server.close(async () => {
+        console.log('   Server closed');
+        await db.close();
+        console.log('   Database connections closed');
+        process.exit(0);
+      });
+    });
 
   } catch (error) {
-    console.error('[Server] Failed to start server:', error.message);
+    console.error('❌ Failed to start server:', error.message);
+    console.error(error.stack);
     process.exit(1);
   }
 }
 
-/**
- * Start the server
- */
 startServer();

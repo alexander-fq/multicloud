@@ -1,183 +1,70 @@
-/**
- * Express Application Setup
- * Main application file that configures Express and middleware
- *
- * This file exports the Express app without starting the server,
- * which allows for easier testing and modular server startup.
- */
-
-require('dotenv').config();
 const express = require('express');
-const helmet = require('helmet');
 const cors = require('cors');
-const compression = require('compression');
+const helmet = require('helmet');
+const morgan = require('morgan');
+// const { getMonitoringService } = require('./services/factory');
 
-// Import middleware
-const {
-  requestLogger,
-  errorHandler,
-  notFoundHandler,
-  corsOptions,
-  helmetOptions,
-  apiLimiter
-} = require('./middleware');
+// Middleware
+const { errorHandler } = require('./middleware/errorHandler');
+// const security = require('./middleware/security');
+// const requestLogger = require('./middleware/requestLogger');
 
-// Import routes
-const apiRoutes = require('./routes/index');
+// Routes
+const healthRoutes = require('./routes/health');
+const migrationRoutes = require('./routes/migration');
+const infoRoutes = require('./routes/info');
 
-// Import database connection
-const { testConnection, closeConnection } = require('./config/database');
-
-/**
- * Create Express application
- */
 const app = express();
 
-/**
- * Trust proxy
- * Enable if behind reverse proxy (Nginx, AWS ALB, etc.)
- */
-app.set('trust proxy', 1);
+// Security middleware
+app.use(helmet());
+app.use(cors());
+// app.use(security);
 
-/**
- * Security Middleware
- * Apply security headers and CORS
- */
-app.use(helmet(helmetOptions));
-app.use(cors(corsOptions));
-
-/**
- * Body Parser Middleware
- * Parse JSON and URL-encoded bodies
- */
+// Body parsing
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-/**
- * Compression Middleware
- * Compress response bodies
- */
-app.use(compression());
+// Logging
+app.use(morgan('combined'));
+// app.use(requestLogger);
 
-/**
- * Request Logger Middleware
- * Log all HTTP requests
- */
-app.use(requestLogger);
+// Routes
+app.use('/api/health', healthRoutes);
+app.use('/api/migration', migrationRoutes);
+app.use('/api/info', infoRoutes);
 
-/**
- * Rate Limiting Middleware
- * Apply rate limiting to all API routes
- */
-app.use('/api', apiLimiter);
-
-/**
- * API Routes
- * Mount all API routes under /api/v1
- */
-app.use('/api/v1', apiRoutes);
-
-/**
- * Root Route
- * Simple welcome message
- */
+// Root endpoint
 app.get('/', (req, res) => {
   res.json({
-    success: true,
-    message: 'GovTech Tramites API',
+    name: 'GovTech Cloud Migration Platform',
     version: '1.0.0',
+    description: 'Multi-cloud backend architecture for government digital transformation',
+    provider: process.env.CLOUD_PROVIDER || 'aws',
     endpoints: {
-      api: '/api/v1',
-      health: '/api/v1/health',
-      tramites: '/api/v1/tramites',
-      documentation: '/api/v1/docs'
-    }
+      health: '/api/health',
+      migration: '/api/migration',
+      info: '/api/info'
+    },
+    documentation: 'https://github.com/alexander-fq/multicloud'
   });
 });
 
-/**
- * Not Found Handler
- * Handles requests to undefined routes
- * Must be placed AFTER all other routes
- */
-app.use(notFoundHandler);
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({
+    error: 'Not Found',
+    message: `Route ${req.method} ${req.path} not found`,
+    availableRoutes: [
+      'GET /',
+      'GET /api/health',
+      'GET /api/info',
+      'POST /api/migration/scan'
+    ]
+  });
+});
 
-/**
- * Error Handler Middleware
- * Centralized error handling
- * Must be placed LAST in the middleware chain
- */
+// Error handler (must be last)
 app.use(errorHandler);
 
-/**
- * Database Connection
- * Test database connection on startup
- */
-async function initializeDatabase() {
-  try {
-    await testConnection();
-    console.log('[App] Database connection initialized');
-  } catch (error) {
-    console.error('[App] Failed to connect to database:', error.message);
-    // Don't exit, let the app start anyway (graceful degradation)
-    // In production, you might want to exit here
-    if (process.env.NODE_ENV === 'production') {
-      console.error('[App] Exiting due to database connection failure in production');
-      process.exit(1);
-    }
-  }
-}
-
-/**
- * Graceful Shutdown
- * Handles SIGTERM and SIGINT signals
- */
-async function gracefulShutdown(signal) {
-  console.log(`\n[App] ${signal} received. Starting graceful shutdown...`);
-
-  try {
-    // Close database connection
-    await closeConnection();
-    console.log('[App] Database connection closed');
-
-    // Give ongoing requests time to complete
-    setTimeout(() => {
-      console.log('[App] Graceful shutdown completed');
-      process.exit(0);
-    }, 1000);
-
-  } catch (error) {
-    console.error('[App] Error during shutdown:', error.message);
-    process.exit(1);
-  }
-}
-
-/**
- * Register shutdown handlers
- */
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
-
-/**
- * Handle uncaught exceptions
- */
-process.on('uncaughtException', (error) => {
-  console.error('[App] Uncaught Exception:', error);
-  gracefulShutdown('UNCAUGHT_EXCEPTION');
-});
-
-/**
- * Handle unhandled promise rejections
- */
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('[App] Unhandled Rejection at:', promise, 'reason:', reason);
-  gracefulShutdown('UNHANDLED_REJECTION');
-});
-
-/**
- * Export app and initialization function
- */
-module.exports = {
-  app,
-  initializeDatabase
-};
+module.exports = app;
