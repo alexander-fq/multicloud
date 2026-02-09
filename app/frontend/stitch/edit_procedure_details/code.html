@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Edit Procedure Details - GovTech Trámites</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@300;400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#1e3fae",
+                        "background-light": "#f6f6f8",
+                        "background-dark": "#121520",
+                    },
+                    fontFamily: {
+                        "display": ["Public Sans"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display text-[#0f111a] dark:text-[#f8f9fb] transition-colors duration-300">
+<div class="relative flex h-auto min-h-screen w-full flex-col overflow-x-hidden">
+<div class="layout-container flex h-full grow flex-col">
+<!-- Top Navigation Bar -->
+<header class="flex items-center justify-between whitespace-nowrap border-b border-solid border-[#e8eaf2] dark:border-[#2d324a] bg-white dark:bg-[#1a1e2e] px-6 lg:px-10 py-3 sticky top-0 z-50">
+<div class="flex items-center gap-4 text-[#0f111a] dark:text-white">
+<div class="size-8 text-primary">
+<svg fill="none" viewbox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+<path clip-rule="evenodd" d="M24 18.4228L42 11.475V34.3663C42 34.7796 41.7457 35.1504 41.3601 35.2992L24 42V18.4228Z" fill="currentColor" fill-rule="evenodd"></path>
+<path clip-rule="evenodd" d="M24 8.18819L33.4123 11.574L24 15.2071L14.5877 11.574L24 8.18819ZM9 15.8487L21 20.4805V37.6263L9 32.9945V15.8487ZM27 37.6263V20.4805L39 15.8487V32.9945L27 37.6263ZM25.354 2.29885C24.4788 1.98402 23.5212 1.98402 22.646 2.29885L4.98454 8.65208C3.7939 9.08038 3 10.2097 3 11.475V34.3663C3 36.0196 4.01719 37.5026 5.55962 38.098L22.9197 44.7987C23.6149 45.0671 24.3851 45.0671 25.0803 44.7987L42.4404 38.098C43.9828 37.5026 45 36.0196 45 34.3663V11.475C45 10.2097 44.2061 9.08038 43.0155 8.65208L25.354 2.29885Z" fill="currentColor" fill-rule="evenodd"></path>
+</svg>
+</div>
+<h2 class="text-lg font-bold leading-tight tracking-[-0.015em]">GovTech Trámites</h2>
+</div>
+<div class="hidden md:flex flex-1 justify-center gap-8">
+<a class="text-sm font-medium hover:text-primary transition-colors" href="#">Dashboard</a>
+<a class="text-sm font-bold border-b-2 border-primary" href="#">Procedures</a>
+<a class="text-sm font-medium hover:text-primary transition-colors" href="#">Citizens</a>
+<a class="text-sm font-medium hover:text-primary transition-colors" href="#">Reports</a>
+</div>
+<div class="flex items-center gap-4">
+<div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10 border border-[#e8eaf2] dark:border-[#2d324a]" data-alt="User profile avatar circle" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuD2J_hGyyGSlPjMAVvzT4gQqeFkgHurmMTb3ZoCRTiDihgQLnQAUskr9Mb2iJC_rWB9IXpUN5Q4dnZfvMFjKI73K9807dBk9jvWEpLNRGXjwU2NCpyThehY_ze1g1ppXRVILRMzWcvlUoOJjIZ1lI8doa4oqNgCb3S2vzHEOMWNh-pmoSj3Agb-407HFCD_UDhUEoEPG08mJAk2IyaPvME_UfjiBaTQCWVCNdC2wh2proaFcBwSIHiU1KOtvzuUNJy-ETnC_iT1F00");'></div>
+</div>
+</header>
+<main class="flex-1 px-4 lg:px-20 xl:px-40 py-8">
+<!-- Page Header -->
+<div class="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
+<div class="flex flex-col gap-2">
+<div class="flex items-center gap-2 text-sm text-[#536293] dark:text-[#a0acc9]">
+<a class="hover:text-primary" href="#">Procedures</a>
+<span class="material-symbols-outlined text-xs">chevron_right</span>
+<span>Details</span>
+</div>
+<h1 class="text-[#0f111a] dark:text-white text-4xl font-black leading-tight tracking-[-0.033em]">Procedure #PRC-99281</h1>
+<p class="text-[#536293] dark:text-[#a0acc9] text-base font-normal">Manage and update the current status of the citizen application.</p>
+</div>
+<div class="flex gap-3">
+<button class="flex min-w-[120px] cursor-pointer items-center justify-center rounded-lg h-11 px-5 bg-[#e8eaf2] dark:bg-[#2d324a] text-[#0f111a] dark:text-white text-sm font-bold transition-all hover:bg-gray-200 dark:hover:bg-gray-700">
+<span class="material-symbols-outlined mr-2 text-lg">arrow_back</span>
+                            Back to List
+                        </button>
+<button class="flex min-w-[120px] cursor-pointer items-center justify-center rounded-lg h-11 px-5 bg-primary text-white text-sm font-bold transition-all hover:brightness-110">
+<span class="material-symbols-outlined mr-2 text-lg">save</span>
+                            Save Changes
+                        </button>
+</div>
+</div>
+<!-- Main Content Split Layout -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+<!-- Left Column: Citizen & Static Info (1/3 approx) -->
+<div class="lg:col-span-4 flex flex-col gap-6">
+<section class="bg-white dark:bg-[#1a1e2e] rounded-xl border border-[#e8eaf2] dark:border-[#2d324a] overflow-hidden shadow-sm">
+<div class="p-5 border-b border-[#e8eaf2] dark:border-[#2d324a] bg-gray-50 dark:bg-[#1e2336]">
+<h2 class="text-lg font-bold flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">person</span>
+                                    Citizen Information
+                                </h2>
+</div>
+<div class="p-5 space-y-4">
+<div class="flex flex-col gap-1">
+<p class="text-[#536293] dark:text-[#a0acc9] text-xs font-semibold uppercase tracking-wider">Full Name</p>
+<p class="text-[#0f111a] dark:text-white text-base font-medium">Juan Pérez</p>
+</div>
+<div class="flex flex-col gap-1">
+<p class="text-[#536293] dark:text-[#a0acc9] text-xs font-semibold uppercase tracking-wider">National ID</p>
+<p class="text-[#0f111a] dark:text-white text-base font-medium">ID-88273645</p>
+</div>
+<div class="flex flex-col gap-1">
+<p class="text-[#536293] dark:text-[#a0acc9] text-xs font-semibold uppercase tracking-wider">Email Address</p>
+<p class="text-[#0f111a] dark:text-white text-base font-medium">juan.perez@email.com</p>
+</div>
+<div class="flex flex-col gap-1">
+<p class="text-[#536293] dark:text-[#a0acc9] text-xs font-semibold uppercase tracking-wider">Phone Number</p>
+<p class="text-[#0f111a] dark:text-white text-base font-medium">+54 11 4567-8910</p>
+</div>
+</div>
+</section>
+<section class="bg-white dark:bg-[#1a1e2e] rounded-xl border border-[#e8eaf2] dark:border-[#2d324a] overflow-hidden shadow-sm">
+<div class="p-5 border-b border-[#e8eaf2] dark:border-[#2d324a] bg-gray-50 dark:bg-[#1e2336]">
+<h2 class="text-lg font-bold flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">info</span>
+                                    Procedure Metadata
+                                </h2>
+</div>
+<div class="p-5 space-y-4">
+<div class="flex flex-col gap-1">
+<p class="text-[#536293] dark:text-[#a0acc9] text-xs font-semibold uppercase tracking-wider">Procedure Type</p>
+<p class="text-[#0f111a] dark:text-white text-base font-medium">Building Permit (Class A)</p>
+</div>
+<div class="flex flex-col gap-1">
+<p class="text-[#536293] dark:text-[#a0acc9] text-xs font-semibold uppercase tracking-wider">Submission Date</p>
+<p class="text-[#0f111a] dark:text-white text-base font-medium">October 12, 2023</p>
+</div>
+<div class="flex flex-col gap-1">
+<p class="text-[#536293] dark:text-[#a0acc9] text-xs font-semibold uppercase tracking-wider">Assigned Officer</p>
+<p class="text-[#0f111a] dark:text-white text-base font-medium">Lic. Marta Rodriguez</p>
+</div>
+</div>
+</section>
+<button class="flex items-center justify-center gap-2 text-primary dark:text-[#4f7cff] font-bold text-sm hover:underline py-2">
+<span class="material-symbols-outlined">description</span>
+                            Download Original Application (PDF)
+                        </button>
+</div>
+<!-- Right Column: Edit Controls (2/3 approx) -->
+<div class="lg:col-span-8 flex flex-col gap-6">
+<!-- Status and Editing Card -->
+<div class="bg-white dark:bg-[#1a1e2e] rounded-xl border border-[#e8eaf2] dark:border-[#2d324a] shadow-sm">
+<div class="p-6 border-b border-[#e8eaf2] dark:border-[#2d324a]">
+<h2 class="text-xl font-bold text-[#0f111a] dark:text-white mb-6">Update Procedure Status</h2>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+<div class="flex flex-col gap-2">
+<label class="text-sm font-bold text-[#0f111a] dark:text-white">Current Status</label>
+<select class="w-full h-12 bg-[#f8f9fb] dark:bg-[#121520] border-[#d1d6e5] dark:border-[#2d324a] rounded-lg text-sm font-medium focus:ring-primary focus:border-primary">
+<option value="in_review">In Review</option>
+<option selected="" value="pending">Pending Information</option>
+<option value="approved">Approved</option>
+<option value="rejected">Rejected</option>
+</select>
+</div>
+<div class="bg-primary/5 border border-primary/20 rounded-lg p-4 flex gap-3">
+<span class="material-symbols-outlined text-primary">warning</span>
+<div>
+<p class="text-xs font-bold text-primary uppercase">Status Insight</p>
+<p class="text-sm text-[#536293] dark:text-[#a0acc9]">Changing status to "Approved" requires all mandatory documents to be checked.</p>
+</div>
+</div>
+</div>
+</div>
+<div class="p-6 border-b border-[#e8eaf2] dark:border-[#2d324a]">
+<h3 class="text-lg font-bold text-[#0f111a] dark:text-white mb-4">Pending Documents Checklist</h3>
+<div class="space-y-3 mb-6">
+<label class="flex items-center gap-3 p-3 bg-[#f8f9fb] dark:bg-[#121520] border border-[#d1d6e5] dark:border-[#2d324a] rounded-lg cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+<input checked="" class="size-5 rounded border-gray-300 text-primary focus:ring-primary" type="checkbox"/>
+<span class="text-sm font-medium">National Identity Document Photocopy</span>
+<span class="ml-auto text-xs font-bold text-green-600 bg-green-100 px-2 py-0.5 rounded-full">RECEIVED</span>
+</label>
+<label class="flex items-center gap-3 p-3 bg-[#f8f9fb] dark:bg-[#121520] border border-[#d1d6e5] dark:border-[#2d324a] rounded-lg cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+<input class="size-5 rounded border-gray-300 text-primary focus:ring-primary" type="checkbox"/>
+<span class="text-sm font-medium">Proof of Address (Utility Bill)</span>
+<span class="ml-auto text-xs font-bold text-yellow-600 bg-yellow-100 px-2 py-0.5 rounded-full">MISSING</span>
+</label>
+<label class="flex items-center gap-3 p-3 bg-[#f8f9fb] dark:bg-[#121520] border border-[#d1d6e5] dark:border-[#2d324a] rounded-lg cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+<input class="size-5 rounded border-gray-300 text-primary focus:ring-primary" type="checkbox"/>
+<span class="text-sm font-medium">Technical Blueprints (Signed by Architect)</span>
+<span class="ml-auto text-xs font-bold text-yellow-600 bg-yellow-100 px-2 py-0.5 rounded-full">MISSING</span>
+</label>
+</div>
+<div class="flex gap-2">
+<input class="flex-1 h-10 px-4 bg-white dark:bg-[#0f111a] border-[#d1d6e5] dark:border-[#2d324a] rounded-lg text-sm focus:ring-primary focus:border-primary" placeholder="Add custom document requirement..." type="text"/>
+<button class="bg-[#e8eaf2] dark:bg-[#2d324a] text-[#0f111a] dark:text-white px-4 rounded-lg font-bold text-sm hover:brightness-95">Add</button>
+</div>
+</div>
+<div class="p-6">
+<h3 class="text-lg font-bold text-[#0f111a] dark:text-white mb-4">Observations &amp; Notes</h3>
+<textarea class="w-full bg-[#f8f9fb] dark:bg-[#121520] border-[#d1d6e5] dark:border-[#2d324a] rounded-lg p-4 text-sm focus:ring-primary focus:border-primary" placeholder="Enter administrative observations or requirements for the citizen..." rows="6"></textarea>
+<p class="mt-2 text-xs text-[#536293] dark:text-[#a0acc9]">These observations will be visible to the citizen in their personal portal.</p>
+</div>
+<div class="p-6 bg-gray-50 dark:bg-[#1e2336] rounded-b-xl border-t border-[#e8eaf2] dark:border-[#2d324a] flex items-center justify-between">
+<p class="text-xs text-[#536293] dark:text-[#a0acc9]">Last updated by <span class="font-bold">admin_rodriguez</span> on Oct 24, 2023 - 14:30</p>
+<div class="flex gap-2">
+<button class="px-6 py-2 text-sm font-bold text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg">Discard</button>
+<button class="px-8 py-2 text-sm font-bold bg-primary text-white rounded-lg shadow-lg shadow-primary/20 hover:brightness-110">Update Procedure</button>
+</div>
+</div>
+</div>
+<!-- History / Audit Trail Mini-Section -->
+<section class="bg-white dark:bg-[#1a1e2e] rounded-xl border border-[#e8eaf2] dark:border-[#2d324a] shadow-sm">
+<div class="p-4 border-b border-[#e8eaf2] dark:border-[#2d324a] flex justify-between items-center">
+<h3 class="font-bold text-sm uppercase tracking-widest text-[#536293] dark:text-[#a0acc9]">Recent Activity Log</h3>
+<button class="text-primary text-xs font-bold">View Full History</button>
+</div>
+<div class="p-4 space-y-4">
+<div class="flex gap-3">
+<div class="flex-none mt-1 size-2 rounded-full bg-primary"></div>
+<div>
+<p class="text-sm font-medium">Status changed from <span class="text-[#536293]">Created</span> to <span class="text-primary font-bold">In Review</span></p>
+<p class="text-xs text-[#536293] dark:text-[#a0acc9]">Oct 15, 2023 at 09:12 AM by System</p>
+</div>
+</div>
+<div class="flex gap-3">
+<div class="flex-none mt-1 size-2 rounded-full bg-green-500"></div>
+<div>
+<p class="text-sm font-medium">Document "National Identity Document" verified</p>
+<p class="text-xs text-[#536293] dark:text-[#a0acc9]">Oct 12, 2023 at 11:45 AM by admin_rodriguez</p>
+</div>
+</div>
+</div>
+</section>
+</div>
+</div>
+</main>
+<!-- Bottom Floating Action for Mobile/Small Desktop -->
+<div class="fixed bottom-6 right-6 lg:hidden">
+<button class="size-14 rounded-full bg-primary text-white shadow-2xl flex items-center justify-center hover:scale-105 transition-transform">
+<span class="material-symbols-outlined text-3xl">save</span>
+</button>
+</div>
+</div>
+</div>
+</body></html>
