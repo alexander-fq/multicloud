@@ -1,0 +1,43 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "GitHubActionsRole",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateRole",
+        "iam:AttachRolePolicy",
+        "iam:PassRole"
+      ],
+      "Resource": "arn:aws:iam::*:role/GovTech-GitHubActions-*",
+      "Condition": {
+        "StringEquals": {
+          "iam:PassedToService": "ecs-tasks.amazonaws.com"
+        }
+      }
+    },
+    {
+      "Sid": "SecretsManagerCICD",
+      "Effect": "Allow",
+      "Action": [
+        "secretsmanager:CreateSecret",
+        "secretsmanager:UpdateSecret",
+        "secretsmanager:GetSecretValue"
+      ],
+      "Resource": "arn:aws:secretsmanager:us-east-1:*:secret:govtech/cicd/*"
+    },
+    {
+      "Sid": "S3ArtifactsAccess",
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject",
+        "s3:GetObject",
+        "s3:ListBucket"
+      ],
+      "Resource": [
+        "arn:aws:s3:::govtech-build-artifacts",
+        "arn:aws:s3:::govtech-build-artifacts/*"
+      ]
+    }
+  ]
+}

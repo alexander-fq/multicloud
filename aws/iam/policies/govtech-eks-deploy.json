@@ -1,0 +1,40 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "EKSClusterAccess",
+      "Effect": "Allow",
+      "Action": [
+        "eks:DescribeCluster",
+        "eks:ListClusters",
+        "eks:AccessKubernetesApi"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "EKSNodeGroupRead",
+      "Effect": "Allow",
+      "Action": [
+        "eks:DescribeNodegroup",
+        "eks:ListNodegroups"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "EBSVolumeManagement",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:CreateVolume",
+        "ec2:AttachVolume",
+        "ec2:DetachVolume",
+        "ec2:DescribeVolumes"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "ec2:ResourceTag/Kubernetes": "owned"
+        }
+      }
+    }
+  ]
+}

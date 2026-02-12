@@ -1,0 +1,31 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "CloudWatchFullAccess",
+      "Effect": "Allow",
+      "Action": [
+        "cloudwatch:*",
+        "logs:*"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "EC2ReadForMonitoring",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:Describe*"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "EKSReadForMonitoring",
+      "Effect": "Allow",
+      "Action": [
+        "eks:DescribeCluster",
+        "eks:ListClusters"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

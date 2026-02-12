@@ -2,37 +2,60 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
-// const { getMonitoringService } = require('./services/factory');
+const compression = require('compression');
+
+// Configuration and utilities
+const config = require('./config/env');
+const logger = require('./utils/logger');
 
 // Middleware
 const { errorHandler } = require('./middleware/errorHandler');
-// const security = require('./middleware/security');
-// const requestLogger = require('./middleware/requestLogger');
+const { corsOptions, helmetOptions, apiLimiter } = require('./middleware/security');
+const { requestLogger } = require('./middleware/requestLogger');
 
 // Routes
 const healthRoutes = require('./routes/health');
 const migrationRoutes = require('./routes/migration');
 const infoRoutes = require('./routes/info');
+const demoRoutes = require('./routes/demo');
 
 const app = express();
 
+// Log application start
+logger.info('Starting GovTech Cloud Migration Platform', {
+  environment: config.nodeEnv,
+  cloudProvider: config.cloudProvider,
+  port: config.port
+});
+
+// Trust proxy (for rate limiting to work correctly behind load balancers)
+app.set('trust proxy', 1);
+
 // Security middleware
-app.use(helmet());
-app.use(cors());
-// app.use(security);
+app.use(helmet(helmetOptions));
+app.use(cors(corsOptions));
+
+// Compression middleware (gzip)
+app.use(compression());
 
 // Body parsing
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: config.isDevelopment ? '10mb' : '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: config.isDevelopment ? '10mb' : '1mb' }));
 
-// Logging
-app.use(morgan('combined'));
-// app.use(requestLogger);
+// Logging middleware
+if (config.isDevelopment) {
+  app.use(morgan('dev'));
+}
+app.use(requestLogger);
+
+// Rate limiting (apply to all /api routes)
+app.use('/api/', apiLimiter);
 
 // Routes
 app.use('/api/health', healthRoutes);
 app.use('/api/migration', migrationRoutes);
 app.use('/api/info', infoRoutes);
+app.use('/api/demo', demoRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -44,7 +67,8 @@ app.get('/', (req, res) => {
     endpoints: {
       health: '/api/health',
       migration: '/api/migration',
-      info: '/api/info'
+      info: '/api/info',
+      demo: '/api/demo'
     },
     documentation: 'https://github.com/alexander-fq/multicloud'
   });

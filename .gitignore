@@ -70,3 +70,13 @@ data/
 # Kubernetes secrets
 *secret*.yaml
 *credentials*.yaml
+!secrets.yaml.template
+
+# AWS Credentials (CRÍTICO - NO SUBIR)
+*credentials*.json
+aws/iam/credentials-*.json
+aws/iam/*.csv
+
+# IAM Access Keys
+*access-key*.json
+*access_key*.json

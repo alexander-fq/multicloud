@@ -1,0 +1,35 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "RDSManagement",
+      "Effect": "Allow",
+      "Action": [
+        "rds:CreateDBInstance",
+        "rds:ModifyDBInstance",
+        "rds:DescribeDBInstances",
+        "rds:CreateDBSubnetGroup",
+        "rds:ModifyDBSubnetGroup"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestedRegion": "us-east-1"
+        }
+      }
+    },
+    {
+      "Sid": "RDSDeletePrevention",
+      "Effect": "Deny",
+      "Action": [
+        "rds:DeleteDBInstance"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringLike": {
+          "rds:db-tag/Environment": "production"
+        }
+      }
+    }
+  ]
+}

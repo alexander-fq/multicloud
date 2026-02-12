@@ -39,13 +39,11 @@ router.get('/', async (req, res) => {
     // Overall status
     if (!dbHealthy || !credsValid) {
       health.status = 'degraded';
-      res.status(503);
     }
 
   } catch (error) {
     health.status = 'unhealthy';
     health.error = error.message;
-    res.status(503);
   }
 
   health.responseTime = `${Date.now() - startTime}ms`;
@@ -63,9 +61,10 @@ router.get('/database', async (req, res) => {
     const stats = await db.getPoolStats();
 
     if (!healthy) {
-      return res.status(503).json({
+      return res.json({
         status: 'unhealthy',
-        message: 'Database connection failed'
+        message: 'Database connection failed',
+        provider: getProvider()
       });
     }
 
@@ -75,9 +74,10 @@ router.get('/database', async (req, res) => {
       provider: getProvider()
     });
   } catch (error) {
-    res.status(503).json({
+    res.json({
       status: 'unhealthy',
-      error: error.message
+      error: error.message,
+      provider: getProvider()
     });
   }
 });
@@ -93,9 +93,10 @@ router.get('/cloud', async (req, res) => {
     const identity = valid ? await auth.getCurrentIdentity() : null;
 
     if (!valid) {
-      return res.status(503).json({
+      return res.json({
         status: 'unhealthy',
-        message: 'Cloud credentials verification failed'
+        message: 'Cloud credentials verification failed',
+        provider: getProvider()
       });
     }
 
@@ -108,9 +109,10 @@ router.get('/cloud', async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(503).json({
+    res.json({
       status: 'unhealthy',
-      error: error.message
+      error: error.message,
+      provider: getProvider()
     });
   }
 });

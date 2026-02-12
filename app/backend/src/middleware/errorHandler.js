@@ -6,6 +6,8 @@
  * to catch all errors from previous middleware and route handlers
  */
 
+const logger = require('../utils/logger');
+
 /**
  * Not Found Handler
  * Catches requests to undefined routes
@@ -27,15 +29,8 @@ function notFoundHandler(req, res, next) {
  * @param {Function} next - Next middleware function
  */
 function errorHandler(err, req, res, next) {
-  // Log error for debugging
-  console.error('[Error Handler]', {
-    message: err.message,
-    status: err.status || 500,
-    path: req.path,
-    method: req.method,
-    timestamp: new Date().toISOString(),
-    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
-  });
+  // Log error using Winston
+  logger.logError(err, req);
 
   // Determine status code
   const statusCode = err.status || err.statusCode || 500;
