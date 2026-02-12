@@ -1,0 +1,62 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: govtech-postgres
+    ports:
+      - "5435:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: govtech_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - govtech_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d govtech_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./app/backend
+      dockerfile: Dockerfile
+    container_name: govtech-backend
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=govtech_db
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - PORT=3000
+      - NODE_ENV=development
+
+    networks:
+      - govtech_network
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./app/frontend
+      dockerfile: Dockerfile
+    container_name: govtech-frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    networks:
+      - govtech_network
+    restart: unless-stopped
+
+networks:
+  govtech_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
