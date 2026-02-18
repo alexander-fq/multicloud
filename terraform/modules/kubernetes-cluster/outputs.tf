@@ -38,3 +38,13 @@ output "node_role_arn" {
   description = "ARN del IAM Role de los nodos"
   value       = aws_iam_role.eks_nodes.arn
 }
+
+output "oidc_provider_arn" {
+  description = "ARN del OIDC provider (necesario para IRSA)"
+  value       = aws_iam_openid_connect_provider.eks.arn
+}
+
+output "oidc_provider_url" {
+  description = "URL del OIDC provider sin https:// (para trust policies de IRSA)"
+  value       = replace(aws_eks_cluster.main.identity[0].oidc[0].issuer, "https://", "")
+}

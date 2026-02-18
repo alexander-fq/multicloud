@@ -24,6 +24,12 @@ provider "aws" {
   region = "us-east-1"
 }
 
+variable "db_password" {
+  description = "Password de RDS PostgreSQL (pasar via TF_VAR_db_password o GitHub Secret)"
+  type        = string
+  sensitive   = true
+}
+
 # ----------------------------------------
 # NETWORKING: VPC, Subnets, Gateways
 # ----------------------------------------
@@ -58,6 +64,47 @@ module "eks" {
 }
 
 # ----------------------------------------
+# DATABASE: RDS PostgreSQL
+# ----------------------------------------
+module "database" {
+  source = "../../modules/database"
+
+  project_name = "govtech"
+  environment  = "dev"
+
+  # Red: subnets privadas y security group de RDS
+  subnet_ids        = module.networking.private_subnet_ids
+  security_group_id = module.networking.rds_security_group_id
+
+  # En dev: instancia pequeña, sin multi-AZ, pocos dias de backup
+  db_instance_class        = "db.t3.micro"
+  db_allocated_storage     = 20
+  db_max_allocated_storage = 50
+  db_name                  = "govtech"
+  db_username              = "govtech_admin"
+  db_password              = var.db_password
+  multi_az                 = false
+  backup_retention_days    = 3
+}
+
+# ----------------------------------------
+# STORAGE: S3 para archivos de la aplicacion
+# ----------------------------------------
+module "storage" {
+  source = "../../modules/storage"
+
+  project_name   = "govtech"
+  environment    = "dev"
+  aws_account_id = "835960996869"
+
+  cors_allowed_origins = ["http://localhost:5173", "http://localhost:3000"]
+
+  # IRSA: conectar con el OIDC provider del cluster EKS
+  oidc_provider_arn = module.eks.oidc_provider_arn
+  oidc_provider_url = module.eks.oidc_provider_url
+}
+
+# ----------------------------------------
 # OUTPUTS utiles para kubectl y CI/CD
 # ----------------------------------------
 output "vpc_id" {
@@ -75,4 +122,18 @@ output "cluster_endpoint" {
 output "kubeconfig_command" {
   description = "Comando para conectar kubectl al cluster"
   value       = "aws eks update-kubeconfig --name govtech-dev --region us-east-1"
+}
+
+output "db_endpoint" {
+  value     = module.database.db_instance_endpoint
+  sensitive = true
+}
+
+output "app_bucket" {
+  value = module.storage.bucket_id
+}
+
+output "s3_role_arn" {
+  description = "ARN del IAM role para que los pods accedan a S3"
+  value       = module.storage.s3_access_role_arn
 }
