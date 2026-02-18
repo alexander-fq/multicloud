@@ -1,8 +1,134 @@
 # Diagramas de Arquitectura - GovTech Cloud Migration Platform
 
+> **Enfoque:** Arquitectura hibrida con AWS como nube principal e integracion con
+> infraestructura on-premise del gobierno. El diseno es cloud-agnostic en la capa
+> de aplicacion (Kubernetes) para permitir portabilidad futura a otros proveedores.
+
 ---
 
-## 1. Arquitectura General (Vista de Alto Nivel)
+## 1. Arquitectura Hibrida (On-Premise + AWS Cloud)
+
+Este diagrama muestra el escenario real de un gobierno: sistemas legacy en datacenter
+propio que se integran con nuevos servicios en AWS. La migracion es gradual, no total.
+
+```mermaid
+graph TB
+    subgraph CIUDADANOS["Ciudadanos / Internet"]
+        USER[Navegador]
+        MOBILE[App Movil]
+    end
+
+    subgraph ONPREMISE["Datacenter del Gobierno (On-Premise)"]
+        direction TB
+        LEGACY_DB[(Base de datos\nlegacy Oracle/SQL)]
+        LEGACY_APP[Sistemas\nlegacy Java/COBOL]
+        LDAP[Directorio Activo\nLDAP / LDAPS]
+        VPN_GW[VPN Gateway\nIPSec / Direct Connect]
+    end
+
+    subgraph AWS["AWS Cloud - us-east-1"]
+        R53[Route53 DNS]
+        CF[CloudFront CDN\nedge locations]
+        ALB[Application Load Balancer\nHTTPS / WAF]
+
+        subgraph VPC["VPC Privada"]
+            subgraph EKS["EKS Cluster"]
+                API[Backend\nNode.js API]
+                FRONT[Frontend\nReact / Nginx]
+                MIGRATOR[Servicio de\nMigracion]
+            end
+            RDS[(RDS PostgreSQL\nnuevos datos)]
+            S3[S3\narchivos y docs]
+        end
+
+        DX[AWS Direct Connect\n1Gbps dedicado]
+    end
+
+    USER -->|HTTPS| CF
+    MOBILE -->|HTTPS| CF
+    CF --> ALB
+    ALB --> FRONT
+    ALB -->|/api| API
+    API --> RDS
+    API --> S3
+
+    %% Integracion hibrida
+    API <-->|Consultas legacy\nREST / SOAP| LEGACY_APP
+    API <-->|Autenticacion\nLDAP sobre TLS| LDAP
+    MIGRATOR <-->|Migracion\nde datos| LEGACY_DB
+
+    %% Conectividad segura entre nube y datacenter
+    VPN_GW <-->|Tunel cifrado\nAES-256| DX
+    DX <--> VPC
+
+    style ONPREMISE fill:#e8e8e8,stroke:#666
+    style AWS fill:#fff8e1,stroke:#ff9900
+    style CIUDADANOS fill:#e3f2fd,stroke:#1565c0
+```
+
+**Por que hibrido y no 100% cloud:**
+- Los gobiernos tienen sistemas legacy de decadas que no pueden migrarse de golpe
+- Algunas regulaciones exigen que ciertos datos permanezcan en territorio nacional (datacenter propio)
+- La migracion gradual reduce el riesgo operativo
+- Direct Connect da conectividad privada (no pasa por internet publico)
+
+---
+
+## 2. Arquitectura Multicloud (AWS + GCP como nube secundaria)
+
+Escenario de alta disponibilidad maxima: si AWS us-east-1 falla completamente,
+el trafico se redirige a GCP automaticamente via Route53 health checks.
+
+```mermaid
+graph TB
+    subgraph DNS["DNS Global"]
+        R53[Route53\nHealth Checks\nLatency routing]
+    end
+
+    subgraph AWS_CLOUD["AWS Cloud (Principal - 80% trafico)"]
+        ALB_AWS[ALB\nus-east-1]
+        EKS_AWS[EKS\ngovtech-prod]
+        RDS_AWS[(RDS PostgreSQL\nMulti-AZ)]
+        S3_AWS[S3\nus-east-1]
+    end
+
+    subgraph GCP_CLOUD["GCP Cloud (Secundario - 20% / failover)"]
+        LB_GCP[Cloud Load Balancer\nus-central1]
+        GKE[GKE\ngovtech-gcp]
+        CLOUD_SQL[(Cloud SQL\nPostgreSQL)]
+        GCS[Cloud Storage\nus-central1]
+    end
+
+    subgraph REPLICATION["Sincronizacion entre nubes"]
+        SYNC[Servicio de\nReplicacion\nde datos]
+    end
+
+    USER[Ciudadano] -->|govtech.gob.co| R53
+    R53 -->|Healthy: 80%| ALB_AWS
+    R53 -->|Failover / 20%| LB_GCP
+    ALB_AWS --> EKS_AWS --> RDS_AWS
+    LB_GCP --> GKE --> CLOUD_SQL
+    RDS_AWS <-->|Replicacion async| SYNC
+    SYNC <-->|cada 5 min| CLOUD_SQL
+    S3_AWS <-->|Cross-cloud sync| GCS
+
+    style AWS_CLOUD fill:#fff8e1,stroke:#ff9900
+    style GCP_CLOUD fill:#e8f5e9,stroke:#1b5e20
+    style REPLICATION fill:#f3e5f5,stroke:#6a1b9a
+```
+
+**Cuando aplica este modelo:**
+- Requisito de disponibilidad 99.99% (menos de 52 min de downtime al año)
+- Regulaciones que exigen no depender de un solo proveedor
+- Reduccion de riesgo ante fallas de region completa
+
+**Estado de implementacion:**
+- AWS: **implementado** (Terraform + Kubernetes manifests en este repositorio)
+- GCP: **disenado** (pendiente de implementacion si el cliente lo requiere)
+
+---
+
+## 3. Arquitectura General AWS (Vista de Alto Nivel)
 
 ```mermaid
 graph TB
@@ -58,7 +184,7 @@ graph TB
 
 ---
 
-## 2. Arquitectura de Red (VPC)
+## 4. Arquitectura de Red (VPC)
 
 ```mermaid
 graph LR
@@ -97,7 +223,7 @@ graph LR
 
 ---
 
-## 3. Pipeline CI/CD
+## 5. Pipeline CI/CD
 
 ```mermaid
 sequenceDiagram
@@ -141,7 +267,7 @@ sequenceDiagram
 
 ---
 
-## 4. Flujo de Autoscaling (HPA)
+## 6. Flujo de Autoscaling (HPA)
 
 ```mermaid
 graph TD
@@ -165,7 +291,7 @@ graph TD
 
 ---
 
-## 5. Arquitectura de Recuperacion ante Desastres
+## 7. Arquitectura de Recuperacion ante Desastres
 
 ```mermaid
 graph TB
@@ -205,7 +331,7 @@ graph TB
 
 ---
 
-## 6. Stack de Monitoring
+## 8. Stack de Monitoring
 
 ```mermaid
 graph LR
