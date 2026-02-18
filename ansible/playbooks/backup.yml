@@ -1,0 +1,224 @@
+---
+# ============================================================
+# Playbook: Backup Automatico de Base de Datos
+# GovTech Cloud
+#
+# Que hace este playbook:
+# 1. Conecta al pod de PostgreSQL en Kubernetes
+# 2. Ejecuta pg_dump para crear un backup completo
+# 3. Comprime el backup con gzip
+# 4. Sube el backup a S3 con nombre que incluye la fecha
+# 5. Verifica la integridad del backup
+# 6. Limpia backups locales temporales
+# 7. Borra backups de S3 mas antiguos que N dias
+#
+# Se ejecuta desde localhost (no requiere acceso SSH a nodos EKS)
+# Requiere: kubectl configurado, AWS CLI configurado
+#
+# Uso:
+#   ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/backup.yml
+#   ansible-playbook ansible/playbooks/backup.yml -e "retention_days=30 namespace=govtech"
+#
+# Programacion (cron en CI/CD o AWS EventBridge):
+#   0 2 * * * ansible-playbook /opt/govtech/ansible/playbooks/backup.yml >> /var/log/govtech-backup.log 2>&1
+# ============================================================
+- name: Backup de PostgreSQL a S3
+  hosts: local
+  gather_facts: true
+
+  vars:
+    namespace: govtech
+    postgres_pod_selector: "app=postgres"
+    postgres_user: govtech_admin
+    postgres_db: govtech
+    backup_bucket: "govtech-{{ environment | default('dev') }}-app-storage-835960996869"
+    backup_prefix: "backups/postgresql"
+    retention_days: 30
+    backup_dir: "/tmp/govtech-backups"
+    timestamp: "{{ ansible_date_time.year }}{{ ansible_date_time.month }}{{ ansible_date_time.day }}_{{ ansible_date_time.hour }}{{ ansible_date_time.minute }}"
+
+  tasks:
+    # ========================
+    # PREPARACION
+    # ========================
+    - name: Crear directorio temporal para backups
+      ansible.builtin.file:
+        path: "{{ backup_dir }}"
+        state: directory
+        mode: '0700'  # Solo el usuario que ejecuta puede acceder
+
+    - name: Verificar que kubectl esta disponible
+      ansible.builtin.command: kubectl version --client --short
+      register: kubectl_check
+      changed_when: false
+      failed_when: kubectl_check.rc != 0
+
+    - name: Verificar que el pod de PostgreSQL existe y esta Running
+      ansible.builtin.command: >
+        kubectl get pod -l {{ postgres_pod_selector }}
+        -n {{ namespace }}
+        -o jsonpath='{.items[0].status.phase}'
+      register: pod_status
+      changed_when: false
+      failed_when: pod_status.stdout != "Running"
+
+    - name: Obtener nombre del pod de PostgreSQL
+      ansible.builtin.command: >
+        kubectl get pod -l {{ postgres_pod_selector }}
+        -n {{ namespace }}
+        -o jsonpath='{.items[0].metadata.name}'
+      register: postgres_pod_name
+      changed_when: false
+
+    - name: Mostrar pod encontrado
+      ansible.builtin.debug:
+        msg: "Pod PostgreSQL: {{ postgres_pod_name.stdout }} (Estado: {{ pod_status.stdout }})"
+
+    # ========================
+    # CREAR BACKUP
+    # pg_dump: herramienta oficial de PostgreSQL para backups
+    # --format=custom: formato binario comprimido de PostgreSQL
+    #   - Mas eficiente que SQL plano
+    #   - Permite restauracion paralela
+    #   - Permite restauracion selectiva de tablas
+    # ========================
+    - name: Definir nombre del archivo de backup
+      ansible.builtin.set_fact:
+        backup_filename: "{{ postgres_db }}_{{ timestamp }}.dump"
+        backup_path: "{{ backup_dir }}/{{ postgres_db }}_{{ timestamp }}.dump"
+
+    - name: Ejecutar pg_dump dentro del pod PostgreSQL
+      ansible.builtin.command: >
+        kubectl exec {{ postgres_pod_name.stdout }}
+        -n {{ namespace }}
+        -- pg_dump
+        --username={{ postgres_user }}
+        --dbname={{ postgres_db }}
+        --format=custom
+        --compress=9
+        --file=/tmp/{{ backup_filename }}
+      environment:
+        PGPASSWORD: "{{ lookup('env', 'DB_PASSWORD') }}"  # Desde variable de entorno
+      register: pg_dump_result
+      failed_when: pg_dump_result.rc != 0
+
+    - name: Copiar backup del pod al host local
+      ansible.builtin.command: >
+        kubectl cp
+        {{ namespace }}/{{ postgres_pod_name.stdout }}:/tmp/{{ backup_filename }}
+        {{ backup_path }}
+      register: copy_result
+      failed_when: copy_result.rc != 0
+
+    - name: Verificar tamano del backup (debe ser mayor que 0)
+      ansible.builtin.stat:
+        path: "{{ backup_path }}"
+      register: backup_stat
+      failed_when: not backup_stat.stat.exists or backup_stat.stat.size == 0
+
+    - name: Mostrar informacion del backup
+      ansible.builtin.debug:
+        msg: "Backup creado: {{ backup_filename }} ({{ (backup_stat.stat.size / 1024 / 1024) | round(2) }} MB)"
+
+    # ========================
+    # VERIFICACION DE INTEGRIDAD
+    # pg_restore --list verifica que el archivo es un dump valido
+    # sin restaurar los datos (solo lee el indice del archivo)
+    # ========================
+    - name: Verificar integridad del backup con pg_restore
+      ansible.builtin.command: >
+        kubectl exec {{ postgres_pod_name.stdout }}
+        -n {{ namespace }}
+        -- pg_restore --list /tmp/{{ backup_filename }}
+      register: integrity_check
+      changed_when: false
+      failed_when: integrity_check.rc != 0
+
+    - name: Contar tablas en el backup
+      ansible.builtin.shell: "echo '{{ integrity_check.stdout }}' | grep -c 'TABLE DATA' || true"
+      register: table_count
+      changed_when: false
+
+    - name: Mostrar resultado de verificacion
+      ansible.builtin.debug:
+        msg: "Backup valido - {{ table_count.stdout }} tablas incluidas"
+
+    # ========================
+    # SUBIR A S3
+    # ========================
+    - name: Subir backup a S3
+      ansible.builtin.command: >
+        aws s3 cp {{ backup_path }}
+        s3://{{ backup_bucket }}/{{ backup_prefix }}/{{ backup_filename }}
+        --storage-class STANDARD_IA
+        --region us-east-1
+      register: s3_upload
+      failed_when: s3_upload.rc != 0
+
+    - name: Verificar que el backup esta en S3
+      ansible.builtin.command: >
+        aws s3 ls s3://{{ backup_bucket }}/{{ backup_prefix }}/{{ backup_filename }}
+        --region us-east-1
+      register: s3_verify
+      changed_when: false
+      failed_when: s3_verify.rc != 0
+
+    - name: Mostrar URL del backup en S3
+      ansible.builtin.debug:
+        msg: "Backup disponible en: s3://{{ backup_bucket }}/{{ backup_prefix }}/{{ backup_filename }}"
+
+    # ========================
+    # LIMPIEZA LOCAL
+    # ========================
+    - name: Eliminar backup temporal del pod PostgreSQL
+      ansible.builtin.command: >
+        kubectl exec {{ postgres_pod_name.stdout }}
+        -n {{ namespace }}
+        -- rm -f /tmp/{{ backup_filename }}
+      changed_when: true
+
+    - name: Eliminar backup temporal local
+      ansible.builtin.file:
+        path: "{{ backup_path }}"
+        state: absent
+
+    # ========================
+    # ROTACION DE BACKUPS EN S3
+    # Elimina backups mas antiguos que retention_days
+    # ========================
+    - name: Calcular fecha limite de retencion
+      ansible.builtin.set_fact:
+        retention_date: "{{ (ansible_date_time.iso8601 | to_datetime('%Y-%m-%dT%H:%M:%SZ') - timedelta(days=retention_days | int)) | strftime('%Y-%m-%d') }}"
+
+    - name: Listar backups antiguos en S3
+      ansible.builtin.command: >
+        aws s3api list-objects-v2
+        --bucket {{ backup_bucket }}
+        --prefix {{ backup_prefix }}/
+        --query "Contents[?LastModified<='{{ retention_date }}T00:00:00Z'].Key"
+        --output text
+        --region us-east-1
+      register: old_backups
+      changed_when: false
+
+    - name: Eliminar backups antiguos de S3
+      ansible.builtin.command: >
+        aws s3 rm s3://{{ backup_bucket }}/{{ item }}
+        --region us-east-1
+      loop: "{{ old_backups.stdout_lines }}"
+      when:
+        - old_backups.stdout != ""
+        - old_backups.stdout != "None"
+      register: deleted_backups
+
+    - name: Resumen final del backup
+      ansible.builtin.debug:
+        msg:
+          - "========================="
+          - "BACKUP COMPLETADO"
+          - "Archivo: {{ backup_filename }}"
+          - "Bucket: s3://{{ backup_bucket }}/{{ backup_prefix }}/"
+          - "Tablas: {{ table_count.stdout }}"
+          - "Retencion: {{ retention_days }} dias"
+          - "Backups eliminados: {{ deleted_backups.results | default([]) | length }}"
+          - "========================="

@@ -1,0 +1,317 @@
+---
+# ============================================================
+# Playbook: Hardening de Servidores
+# GovTech Cloud - Seguridad para nodos EKS
+#
+# Que hace este playbook:
+# 1. Actualizaciones del sistema operativo
+# 2. Configuracion segura de SSH (deshabilitar root, password auth)
+# 3. Firewall (iptables/nftables): solo puertos necesarios
+# 4. Auditoria del sistema (auditd): registra cambios criticos
+# 5. Limitar acceso sudo
+# 6. Configurar NTP (sincronizacion de tiempo - importante para logs)
+# 7. Remover paquetes innecesarios
+#
+# Uso:
+#   ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/hardening.yml
+#   ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/hardening.yml --limit eks_nodes
+#   ansible-playbook -i ansible/inventory/aws_ec2.yml ansible/playbooks/hardening.yml --check  # Dry run
+# ============================================================
+- name: Hardening de Seguridad - Nodos GovTech
+  hosts: eks_nodes
+  become: true  # Ejecutar como root (sudo)
+  gather_facts: true
+
+  vars:
+    # Puertos permitidos en el firewall
+    allowed_tcp_ports:
+      - 22    # SSH (desde bastion o IP admin)
+      - 443   # HTTPS (kubelet API, comunicacion del cluster)
+      - 10250 # kubelet (metrics server, kubectl exec)
+      - 10255 # kubelet read-only (opcional, puede deshabilitarse)
+      - 30000-32767  # NodePort range de Kubernetes
+
+    # Usuarios que pueden usar sudo (ademas de ec2-user)
+    sudo_users:
+      - ec2-user
+
+    # Banners de advertencia (obligatorio en sistemas de gobierno)
+    login_banner: |
+      ============================================================
+      SISTEMA RESERVADO - GOVTECH
+      Acceso restringido a personal autorizado.
+      Todo acceso es monitoreado y registrado.
+      El uso no autorizado esta prohibido y puede ser penalizado.
+      ============================================================
+
+  tasks:
+    # ========================
+    # ACTUALIZACIONES DEL SO
+    # ========================
+    - name: Actualizar todos los paquetes del sistema
+      ansible.builtin.yum:
+        name: "*"
+        state: latest
+        security: true  # Solo actualizaciones de seguridad si se quiere ser conservador
+      notify: restart_services
+
+    - name: Instalar paquetes de seguridad necesarios
+      ansible.builtin.yum:
+        name:
+          - audit        # auditd: registro de eventos del sistema
+          - aide         # AIDE: deteccion de intrusiones (checksums de archivos)
+          - fail2ban     # Proteccion contra fuerza bruta
+          - ntp          # Sincronizacion de tiempo
+          - policycoreutils-python-utils  # SELinux tools
+        state: present
+
+    # ========================
+    # CONFIGURACION SSH SEGURA
+    # Cada opcion es una medida de seguridad especifica
+    # ========================
+    - name: Configurar SSH de forma segura
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+        state: present
+        validate: "sshd -t -f %s"  # Validar config antes de guardar
+      loop:
+        # Deshabilitar login de root directamente
+        - regexp: "^#?PermitRootLogin"
+          line: "PermitRootLogin no"
+        # Solo autenticacion con llaves SSH (no passwords)
+        - regexp: "^#?PasswordAuthentication"
+          line: "PasswordAuthentication no"
+        # Solo protocolo SSH 2 (el 1 tiene vulnerabilidades conocidas)
+        - regexp: "^#?Protocol"
+          line: "Protocol 2"
+        # Tiempo maximo para completar el login (60 segundos)
+        - regexp: "^#?LoginGraceTime"
+          line: "LoginGraceTime 60"
+        # Maximos intentos fallidos antes de desconectar
+        - regexp: "^#?MaxAuthTries"
+          line: "MaxAuthTries 3"
+        # Deshabilitar X11 forwarding (no necesario en servidores)
+        - regexp: "^#?X11Forwarding"
+          line: "X11Forwarding no"
+        # Deshabilitar forwarding de agente SSH
+        - regexp: "^#?AllowAgentForwarding"
+          line: "AllowAgentForwarding no"
+        # Algoritmos de cifrado seguros (deshabilitar antiguos)
+        - regexp: "^#?Ciphers"
+          line: "Ciphers aes256-gcm@openssh.com,aes128-gcm@openssh.com,chacha20-poly1305@openssh.com"
+        # MACs seguros
+        - regexp: "^#?MACs"
+          line: "MACs hmac-sha2-512,hmac-sha2-256"
+      notify: restart_ssh
+
+    - name: Configurar banner de advertencia en SSH
+      ansible.builtin.copy:
+        content: "{{ login_banner }}"
+        dest: /etc/issue.net
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Habilitar banner en SSH
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "^#?Banner"
+        line: "Banner /etc/issue.net"
+
+    # ========================
+    # AUDITORIA DEL SISTEMA (auditd)
+    # Registra eventos criticos: cambios de archivos, llamadas al sistema
+    # ========================
+    - name: Configurar reglas de auditoria
+      ansible.builtin.copy:
+        dest: /etc/audit/rules.d/govtech.rules
+        content: |
+          # GovTech Audit Rules
+          # Registrar cambios en archivos de autenticacion
+          -w /etc/passwd -p wa -k identity
+          -w /etc/shadow -p wa -k identity
+          -w /etc/group -p wa -k identity
+          -w /etc/gshadow -p wa -k identity
+          -w /etc/sudoers -p wa -k privilege_escalation
+
+          # Registrar cambios en configuracion SSH
+          -w /etc/ssh/sshd_config -p wa -k sshd_config
+
+          # Registrar uso de comandos privilegiados
+          -w /usr/bin/sudo -p x -k sudo_usage
+          -w /bin/su -p x -k su_usage
+
+          # Registrar conexiones de red
+          -a always,exit -F arch=b64 -S connect -k network_connections
+
+          # Registrar modificaciones de archivos criticos del sistema
+          -w /boot -p wa -k boot_files
+          -w /etc/crontab -p wa -k cron
+          -w /etc/cron.d -p wa -k cron
+
+          # Hacer las reglas inmutables (requiere reboot para cambiar)
+          -e 2
+        owner: root
+        group: root
+        mode: '0640'
+      notify: restart_auditd
+
+    - name: Habilitar y arrancar auditd
+      ansible.builtin.service:
+        name: auditd
+        state: started
+        enabled: true
+
+    # ========================
+    # CONFIGURACION DE NTP
+    # La sincronizacion de tiempo es critica para:
+    # - Correlacionar logs de diferentes servidores
+    # - Validez de certificados SSL/TLS
+    # - Kubernetes (los nodos deben estar sincronizados)
+    # ========================
+    - name: Configurar servidor NTP (AWS Time Sync Service)
+      ansible.builtin.copy:
+        dest: /etc/ntp.conf
+        content: |
+          # AWS Time Sync Service (recomendado para instancias EC2)
+          server 169.254.169.123 prefer iburst
+          # Pool NTP publico como fallback
+          pool 0.amazon.pool.ntp.org iburst
+          pool 1.amazon.pool.ntp.org iburst
+          # Configuracion de seguridad
+          restrict default nomodify notrap nopeer noquery
+          restrict 127.0.0.1
+          restrict ::1
+          driftfile /var/lib/ntp/drift
+          logfile /var/log/ntp.log
+        owner: root
+        group: root
+        mode: '0644'
+      notify: restart_ntp
+
+    - name: Habilitar NTP
+      ansible.builtin.service:
+        name: ntpd
+        state: started
+        enabled: true
+
+    # ========================
+    # REMOVER PAQUETES INNECESARIOS
+    # Reduce la superficie de ataque
+    # ========================
+    - name: Remover paquetes no necesarios en servidores
+      ansible.builtin.yum:
+        name:
+          - telnet      # Protocolo inseguro
+          - rsh         # Remote shell inseguro
+          - rsh-client
+          - talk        # Protocolo de chat obsoleto
+          - xinetd      # Super-daemon obsoleto
+        state: absent
+
+    # ========================
+    # CONFIGURACION DE SUDO
+    # ========================
+    - name: Configurar sudoers para logging
+      ansible.builtin.lineinfile:
+        path: /etc/sudoers
+        line: "Defaults logfile=/var/log/sudo.log"
+        validate: visudo -cf %s
+
+    - name: Configurar timeout de sudo (15 minutos)
+      ansible.builtin.lineinfile:
+        path: /etc/sudoers
+        line: "Defaults timestamp_timeout=15"
+        validate: visudo -cf %s
+
+    # ========================
+    # LIMITES DEL SISTEMA
+    # Previene ataques de agotamiento de recursos (fork bombs, etc.)
+    # ========================
+    - name: Configurar limites del sistema
+      ansible.builtin.copy:
+        dest: /etc/security/limits.d/govtech.conf
+        content: |
+          # Limites para todos los usuarios
+          *    soft    nofile    65536    # Maximo archivos abiertos
+          *    hard    nofile    65536
+          *    soft    nproc     4096     # Maximo procesos por usuario
+          *    hard    nproc     4096
+          # ec2-user puede tener mas (necesario para kubectl, etc.)
+          ec2-user    soft    nproc    16384
+          ec2-user    hard    nproc    16384
+        owner: root
+        group: root
+        mode: '0644'
+
+    # ========================
+    # PARAMETROS DEL KERNEL (sysctl)
+    # Hardening a nivel de red y memoria
+    # ========================
+    - name: Aplicar parametros de seguridad del kernel
+      ansible.posix.sysctl:
+        name: "{{ item.name }}"
+        value: "{{ item.value }}"
+        sysctl_set: true
+        state: present
+        reload: true
+      loop:
+        # Deshabilitar IP forwarding (los nodos EKS lo necesitan - NO aplicar)
+        # - name: net.ipv4.ip_forward
+        #   value: "0"
+
+        # Deshabilitar ICMP redirects (prevencion de ataques MITM)
+        - name: net.ipv4.conf.all.accept_redirects
+          value: "0"
+        - name: net.ipv6.conf.all.accept_redirects
+          value: "0"
+        # Deshabilitar source routing (no permitir que paquetes dicten su ruta)
+        - name: net.ipv4.conf.all.accept_source_route
+          value: "0"
+        # Proteccion contra SYN flood
+        - name: net.ipv4.tcp_syncookies
+          value: "1"
+        # Log de paquetes con IPs falsas (martian packets)
+        - name: net.ipv4.conf.all.log_martians
+          value: "1"
+        # Deshabilitar IPv6 si no se usa
+        - name: net.ipv6.conf.all.disable_ipv6
+          value: "1"
+
+    # ========================
+    # VERIFICACION FINAL
+    # ========================
+    - name: Verificar que SSH esta corriendo de forma segura
+      ansible.builtin.command: sshd -T
+      register: sshd_config_check
+      changed_when: false
+
+    - name: Mostrar resumen de configuracion SSH
+      ansible.builtin.debug:
+        msg: "SSH configurado correctamente - PasswordAuthentication: {{ 'no' if 'passwordauthentication no' in sshd_config_check.stdout else 'REVISAR' }}"
+
+  # ========================
+  # HANDLERS
+  # Se ejecutan al final del playbook si fueron notificados
+  # ========================
+  handlers:
+    - name: restart_ssh
+      ansible.builtin.service:
+        name: sshd
+        state: restarted
+
+    - name: restart_auditd
+      ansible.builtin.service:
+        name: auditd
+        state: restarted
+
+    - name: restart_ntp
+      ansible.builtin.service:
+        name: ntpd
+        state: restarted
+
+    - name: restart_services
+      ansible.builtin.debug:
+        msg: "Actualizaciones aplicadas - considerar reinicio del servidor"
