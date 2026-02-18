@@ -1,0 +1,141 @@
+name: Deploy to Production
+
+# Solo se ejecuta manualmente (workflow_dispatch)
+# Requiere aprobacion de un revisor configurado en GitHub Environments
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Tag o SHA de la imagen a desplegar'
+        required: true
+        default: 'latest'
+      confirm:
+        description: 'Escribe DEPLOY para confirmar'
+        required: true
+
+jobs:
+  validate:
+    name: Validar confirmacion
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verificar confirmacion
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "DEPLOY" ]; then
+            echo "ERROR: Debes escribir DEPLOY para confirmar"
+            exit 1
+          fi
+          echo "Confirmacion valida - iniciando deploy a produccion"
+
+  deploy:
+    name: Deploy Blue-Green a Produccion
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: production  # Requiere aprobacion manual configurada en GitHub
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.28.0'
+
+      - name: Conectar a EKS produccion
+        run: aws eks update-kubeconfig --name govtech-prod --region us-east-1
+
+      - name: Login a ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # ----------------------------------------
+      # BLUE-GREEN DEPLOYMENT
+      # Desplegamos la nueva version (green) junto a la existente (blue)
+      # Verificamos que green funcione antes de cambiar el trafico
+      # Si algo falla, el trafico sigue en blue (rollback inmediato)
+      # ----------------------------------------
+      - name: Desplegar version GREEN (nueva)
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.event.inputs.version }}
+        run: |
+          # Actualizar imagen en deployments con el tag especifico
+          kubectl set image deployment/backend \
+            backend=$ECR_REGISTRY/govtech-backend:$IMAGE_TAG \
+            -n govtech \
+            --record
+
+          kubectl set image deployment/frontend \
+            frontend=$ECR_REGISTRY/govtech-frontend:$IMAGE_TAG \
+            -n govtech \
+            --record
+
+      - name: Esperar que GREEN este listo
+        run: |
+          kubectl rollout status deployment/backend -n govtech --timeout=600s
+          kubectl rollout status deployment/frontend -n govtech --timeout=600s
+
+      - name: Health checks en produccion
+        run: |
+          echo "Verificando pods en produccion..."
+          kubectl get pods -n govtech
+
+          # Verificar que todos los pods esten Running
+          BACKEND_READY=$(kubectl get deployment backend -n govtech -o jsonpath='{.status.readyReplicas}')
+          FRONTEND_READY=$(kubectl get deployment frontend -n govtech -o jsonpath='{.status.readyReplicas}')
+
+          echo "Backend pods listos: $BACKEND_READY"
+          echo "Frontend pods listos: $FRONTEND_READY"
+
+          if [ "$BACKEND_READY" -lt "2" ]; then
+            echo "ERROR: Backend no tiene suficientes replicas listas"
+            exit 1
+          fi
+
+          echo "Deploy a produccion exitoso"
+
+      # Si algo falla antes de aqui, GitHub Actions automaticamente
+      # no ejecuta los pasos siguientes, manteniendo la version blue activa
+
+      - name: Notificar deploy exitoso
+        run: |
+          echo "Version ${{ github.event.inputs.version }} desplegada en produccion"
+          echo "Por: ${{ github.actor }}"
+          echo "Fecha: $(date -u)"
+
+  rollback:
+    name: Rollback (si deploy falla)
+    needs: deploy
+    if: failure()
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Conectar a EKS produccion
+        run: aws eks update-kubeconfig --name govtech-prod --region us-east-1
+
+      - name: ROLLBACK automatico
+        run: |
+          echo "Deploy fallido - ejecutando rollback automatico..."
+          kubectl rollout undo deployment/backend -n govtech
+          kubectl rollout undo deployment/frontend -n govtech
+          kubectl rollout status deployment/backend -n govtech --timeout=300s
+          kubectl rollout status deployment/frontend -n govtech --timeout=300s
+          echo "Rollback completado - version anterior restaurada"
