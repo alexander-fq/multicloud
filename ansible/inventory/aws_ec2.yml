@@ -1,0 +1,41 @@
+# ============================================================
+# Inventario Dinamico AWS EC2
+#
+# Este plugin descubre automaticamente las instancias EC2
+# usando la API de AWS, filtrando por tags.
+#
+# Ventaja sobre hosts.yml estatico:
+# - Cuando EKS escala y agrega nuevos nodos, Ansible los descubre
+#   automaticamente sin cambiar este archivo
+#
+# Uso:
+#   ansible-inventory -i ansible/inventory/aws_ec2.yml --list
+#   ansible all -i ansible/inventory/aws_ec2.yml -m ping
+# ============================================================
+plugin: amazon.aws.aws_ec2
+
+regions:
+  - us-east-1
+
+# Filtrar solo instancias con estos tags
+filters:
+  "tag:Project": govtech
+  instance-state-name: running  # Solo instancias activas
+
+# Agrupar instancias por tags
+keyed_groups:
+  # Grupo por ambiente: eks_nodes_dev, eks_nodes_prod
+  - prefix: ""
+    key: tags.Environment
+
+  # Grupo por rol: eks_node, bastion
+  - prefix: role_
+    key: tags.Role
+
+# Variables disponibles para cada host
+hostnames:
+  - private-ip-address  # Usar IP privada (dentro de la VPC)
+
+# Variables adicionales a incluir del host
+compose:
+  ansible_host: private_ip_address

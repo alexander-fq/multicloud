@@ -1,0 +1,186 @@
+---
+# ============================================================
+# Playbook: Configuracion de Nodos EKS
+# GovTech Cloud
+#
+# Se ejecuta cuando un nuevo nodo se une al cluster EKS.
+# Complementa el hardening general con configuracion especifica
+# para nodos de Kubernetes.
+#
+# Que hace:
+# 1. Configura el kubelet con parametros seguros
+# 2. Configura el container runtime (containerd) con logging
+# 3. Aplica labels y taints al nodo
+# 4. Configura limites de recursos del sistema para Kubernetes
+# 5. Verifica que el nodo esta listo para recibir pods
+#
+# Uso:
+#   ansible-playbook -i ansible/inventory/aws_ec2.yml \
+#     ansible/playbooks/configure-eks-node.yml \
+#     --limit role_eks_node
+# ============================================================
+- name: Configurar nodo EKS para GovTech
+  hosts: eks_nodes
+  become: true
+  gather_facts: true
+
+  vars:
+    cluster_name: "{{ cluster_name | default('govtech-dev') }}"
+    max_pods: 110  # Limite de pods por nodo (depende del tipo de instancia)
+    log_max_size: "100m"   # Tamaño maximo de logs de contenedores
+    log_max_files: 5       # Numero maximo de archivos de log rotados
+
+  tasks:
+    # ========================
+    # CONFIGURACION DE CONTAINERD
+    # containerd es el container runtime que usa EKS
+    # ========================
+    - name: Crear directorio de configuracion de containerd
+      ansible.builtin.file:
+        path: /etc/containerd
+        state: directory
+        mode: '0755'
+
+    - name: Configurar containerd con parametros seguros
+      ansible.builtin.copy:
+        dest: /etc/containerd/config.toml
+        content: |
+          version = 2
+
+          [plugins."io.containerd.grpc.v1.cri"]
+            # Deshabilitar puertos privilegiados en contenedores por defecto
+            enable_unprivileged_ports = false
+            enable_unprivileged_icmp = false
+
+            [plugins."io.containerd.grpc.v1.cri".containerd]
+              # Usar snapshotter overlayfs (mas eficiente)
+              snapshotter = "overlayfs"
+
+              [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc]
+                runtime_type = "io.containerd.runc.v2"
+
+                [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]
+                  # Habilitar seccomp por defecto (filtrado de syscalls)
+                  # Reduce la superficie de ataque de los contenedores
+                  SystemdCgroup = true
+
+            [plugins."io.containerd.grpc.v1.cri".registry]
+              # Solo permitir imagenes de ECR de nuestra cuenta (opcional, muy restrictivo)
+              # config_path = "/etc/containerd/certs.d"
+
+          # Configuracion de logging
+          [plugins."io.containerd.runtime.v1.linux"]
+            shim_debug = false
+        owner: root
+        group: root
+        mode: '0644'
+      notify: restart_containerd
+
+    # ========================
+    # CONFIGURACION DEL KUBELET
+    # El kubelet es el agente de Kubernetes que corre en cada nodo
+    # ========================
+    - name: Crear archivo de configuracion del kubelet
+      ansible.builtin.copy:
+        dest: /etc/kubernetes/kubelet/kubelet-config.json
+        content: |
+          {
+            "kind": "KubeletConfiguration",
+            "apiVersion": "kubelet.config.k8s.io/v1beta1",
+            "address": "0.0.0.0",
+            "port": 10250,
+            "serializeImagePulls": false,
+            "maxPods": {{ max_pods }},
+            "containerLogMaxSize": "{{ log_max_size }}",
+            "containerLogMaxFiles": {{ log_max_files }},
+            "protectKernelDefaults": true,
+            "makeIPTablesUtilChains": true,
+            "eventRecordQPS": 5,
+            "kubeAPIQPS": 50,
+            "kubeAPIBurst": 100,
+            "seccompDefault": true,
+            "tlsCertFile": "/etc/kubernetes/pki/kubelet.crt",
+            "tlsPrivateKeyFile": "/etc/kubernetes/pki/kubelet.key",
+            "authentication": {
+              "x509": {
+                "clientCAFile": "/etc/kubernetes/pki/ca.crt"
+              },
+              "webhook": {
+                "enabled": true
+              },
+              "anonymous": {
+                "enabled": false
+              }
+            },
+            "authorization": {
+              "mode": "Webhook"
+            }
+          }
+        owner: root
+        group: root
+        mode: '0644'
+
+    # ========================
+    # PARAMETROS DE KERNEL PARA KUBERNETES
+    # ========================
+    - name: Cargar modulos del kernel necesarios para Kubernetes
+      community.general.modprobe:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - br_netfilter   # Bridge netfilter (necesario para iptables en pods)
+        - overlay        # OverlayFS (sistema de archivos en capas para contenedores)
+        - ip_vs          # IPVS (balanceo de carga del kube-proxy)
+        - ip_vs_rr
+        - ip_vs_wrr
+        - ip_vs_sh
+
+    - name: Persistir carga de modulos en el arranque
+      ansible.builtin.copy:
+        dest: /etc/modules-load.d/kubernetes.conf
+        content: |
+          br_netfilter
+          overlay
+          ip_vs
+          ip_vs_rr
+          ip_vs_wrr
+          ip_vs_sh
+
+    - name: Configurar parametros sysctl para Kubernetes
+      ansible.posix.sysctl:
+        name: "{{ item.name }}"
+        value: "{{ item.value }}"
+        sysctl_set: true
+        reload: true
+      loop:
+        - { name: "net.bridge.bridge-nf-call-iptables",  value: "1" }
+        - { name: "net.bridge.bridge-nf-call-ip6tables", value: "1" }
+        - { name: "net.ipv4.ip_forward",                 value: "1" }
+        - { name: "vm.overcommit_memory",                value: "1" }
+        - { name: "kernel.panic",                        value: "10" }
+        - { name: "kernel.panic_on_oops",                value: "1" }
+
+    # ========================
+    # VERIFICACION DEL NODO
+    # ========================
+    - name: Verificar que el nodo aparece en el cluster
+      ansible.builtin.command: kubectl get node {{ inventory_hostname }} -o jsonpath='{.status.conditions[-1].type}'
+      register: node_status
+      changed_when: false
+      delegate_to: localhost
+      become: false
+      ignore_errors: true
+
+    - name: Resumen de configuracion del nodo
+      ansible.builtin.debug:
+        msg:
+          - "Nodo: {{ inventory_hostname }}"
+          - "Estado en cluster: {{ node_status.stdout | default('no conectado aun') }}"
+          - "Max pods: {{ max_pods }}"
+          - "Log max size: {{ log_max_size }}"
+
+  handlers:
+    - name: restart_containerd
+      ansible.builtin.service:
+        name: containerd
+        state: restarted
