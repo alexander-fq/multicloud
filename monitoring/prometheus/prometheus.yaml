@@ -1,0 +1,228 @@
+# ============================================================
+# Prometheus Stack - Instalacion via Helm values
+# Colaborador C - Semana 3
+#
+# Usamos kube-prometheus-stack (el chart mas completo):
+# - Prometheus: recolecta metricas
+# - Alertmanager: maneja y enruta alertas
+# - Grafana: visualiza metricas (preconfigurado con dashboards)
+# - node-exporter: metricas del sistema operativo de los nodos
+# - kube-state-metrics: metricas del estado de objetos Kubernetes
+#
+# Instalacion:
+#   helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+#   helm repo update
+#   helm install prometheus prometheus-community/kube-prometheus-stack \
+#     -f monitoring/prometheus/prometheus.yaml \
+#     --namespace monitoring \
+#     --create-namespace
+# ============================================================
+
+# ========================
+# PROMETHEUS
+# ========================
+prometheus:
+  prometheusSpec:
+    # Retener metricas 15 dias (suficiente para debugging y tendencias)
+    retention: 15d
+
+    # Almacenamiento persistente para las metricas
+    # Sin PVC, se pierden las metricas si el pod se reinicia
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: gp2
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 50Gi
+
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "250m"
+      limits:
+        memory: "1Gi"
+        cpu: "500m"
+
+    # Descubrir ServiceMonitors de todos los namespaces
+    # (por defecto solo busca en el mismo namespace)
+    serviceMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorSelector: {}
+    serviceMonitorNamespaceSelector: {}
+
+    # Scrape interval: cada cuanto recolectar metricas
+    scrapeInterval: "30s"
+    evaluationInterval: "30s"
+
+# ========================
+# ALERTMANAGER
+# Recibe alertas de Prometheus y las enruta
+# (email, Slack, PagerDuty, etc.)
+# ========================
+alertmanager:
+  alertmanagerSpec:
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: gp2
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 5Gi
+
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "50m"
+      limits:
+        memory: "256Mi"
+        cpu: "100m"
+
+  # Configuracion de rutas de alertas
+  # En produccion: configurar con Slack/PagerDuty real
+  config:
+    global:
+      # Intervalo de re-envio si la alerta sigue activa
+      repeat_interval: 4h
+
+    route:
+      group_by: ['alertname', 'cluster', 'service']
+      group_wait: 30s      # Esperar 30s para agrupar alertas relacionadas
+      group_interval: 5m   # Intervalo entre grupos del mismo tipo
+      repeat_interval: 4h  # Repetir si sigue activa
+      receiver: 'null'     # Por defecto: no enviar (configurar en prod)
+
+      routes:
+        # Silenciar alertas de Watchdog (es normal, es un heartbeat)
+        - matchers:
+            - alertname = Watchdog
+          receiver: 'null'
+
+        # Alertas criticas: prioridad alta
+        - matchers:
+            - severity = critical
+          receiver: 'critical-alerts'
+
+    receivers:
+      - name: 'null'  # No hace nada (para silenciar)
+
+      # CONFIGURAR: Reemplazar con webhook real de Slack
+      - name: 'critical-alerts'
+        webhook_configs:
+          - url: 'http://localhost:5001'  # Placeholder - cambiar en prod
+            send_resolved: true
+
+# ========================
+# GRAFANA
+# Dashboard de visualizacion
+# ========================
+grafana:
+  enabled: true
+
+  adminPassword: "CHANGE_ME_IN_PRODUCTION"  # Cambiar via secret en prod
+
+  # Almacenamiento para dashboards y configuracion
+  persistence:
+    enabled: true
+    storageClassName: gp2
+    size: 5Gi
+
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "200m"
+
+  # Grafana esta disponible SOLO dentro del cluster por defecto
+  # Para acceso externo: usar kubectl port-forward o configurar Ingress
+  service:
+    type: ClusterIP
+
+  # Dashboards adicionales preinstalados
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: 'govtech'
+          orgId: 1
+          folder: 'GovTech'
+          type: file
+          disableDeletion: true
+          options:
+            path: /var/lib/grafana/dashboards/govtech
+
+  # Importar dashboards desde configmap
+  dashboardsConfigMaps:
+    govtech: "govtech-dashboards"
+
+  # Data sources adicionales (Prometheus ya viene preconfigurado)
+  additionalDataSources:
+    - name: CloudWatch
+      type: cloudwatch
+      jsonData:
+        authType: default  # Usa el IAM role del pod (IRSA)
+        defaultRegion: us-east-1
+
+# ========================
+# NODE EXPORTER
+# Metricas del OS de cada nodo (CPU, memoria, disco, red)
+# ========================
+nodeExporter:
+  enabled: true
+
+# ========================
+# KUBE STATE METRICS
+# Metricas de objetos Kubernetes (pods, deployments, etc.)
+# ========================
+kubeStateMetrics:
+  enabled: true
+
+# ========================
+# REGLAS DE ALERTA ADICIONALES
+# Complementan las reglas que vienen con el chart
+# ========================
+additionalPrometheusRulesMap:
+  govtech-rules:
+    groups:
+      - name: govtech.application
+        interval: 30s
+        rules:
+          # Alerta si el backend tiene muchos errores 5xx
+          - alert: HighErrorRate
+            expr: |
+              rate(http_requests_total{namespace="govtech", status=~"5.."}[5m])
+              /
+              rate(http_requests_total{namespace="govtech"}[5m])
+              > 0.05
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Tasa de errores alta en {{ $labels.service }}"
+              description: "La tasa de errores supera 5% en los ultimos 5 minutos"
+
+          # Alerta si el backend no responde (no hay metricas)
+          - alert: BackendDown
+            expr: up{namespace="govtech", job="backend"} == 0
+            for: 2m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Backend no disponible"
+              description: "El servicio backend ha estado caido por mas de 2 minutos"
+
+          # Alerta si la latencia P99 supera 2 segundos
+          - alert: HighLatency
+            expr: |
+              histogram_quantile(0.99,
+                rate(http_request_duration_seconds_bucket{namespace="govtech"}[5m])
+              ) > 2
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Latencia alta en {{ $labels.service }}"
+              description: "P99 de latencia supera 2 segundos"

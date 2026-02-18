@@ -1,0 +1,44 @@
+# ============================================================
+# ServiceMonitor: Backend
+# Colaborador C - Semana 3
+#
+# ServiceMonitor es un recurso de Prometheus Operator
+# Le dice a Prometheus COMO y DONDE recolectar metricas del backend
+#
+# Requisito: el backend debe exponer metricas en formato Prometheus
+# Endpoint: GET /metrics (express-prometheus-middleware o prom-client)
+# ============================================================
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: backend-monitor
+  namespace: govtech
+  labels:
+    # Este label hace que Prometheus (instalado en namespace 'monitoring')
+    # descubra este ServiceMonitor automaticamente
+    release: prometheus
+spec:
+  # A que pods aplica este monitor
+  selector:
+    matchLabels:
+      app: backend  # Debe coincidir con el label del Service del backend
+
+  # En que namespace buscar el Service
+  namespaceSelector:
+    matchNames:
+      - govtech
+
+  endpoints:
+    - port: http         # Nombre del puerto en el Service (port.name: http)
+      path: /metrics     # Endpoint de metricas de Prometheus
+      interval: 30s      # Frecuencia de scrape
+      scrapeTimeout: 10s # Timeout por scrape
+
+      # Metricas adicionales a recolectar del pod (metadata)
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: pod
+        - sourceLabels: [__meta_kubernetes_namespace]
+          targetLabel: namespace
+        - sourceLabels: [__meta_kubernetes_pod_label_app]
+          targetLabel: app
