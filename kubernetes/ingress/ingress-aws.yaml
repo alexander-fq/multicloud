@@ -1,0 +1,136 @@
+# ============================================================
+# Ingress: AWS Application Load Balancer (ALB)
+# Colaborador B - Semana 4
+#
+# Que hace un Ingress:
+# - Es el punto de entrada UNICO a la aplicacion desde internet
+# - Enruta el trafico al servicio correcto segun la URL
+# - /api/* → backend-service (Node.js)
+# - /* → frontend-service (Nginx/React)
+#
+# Que es el AWS Load Balancer Controller:
+# - Un componente que corre en EKS y lee los objetos Ingress
+# - Cuando ve un Ingress con annotations de ALB, crea un ALB real en AWS
+# - El ALB es el balanceador de carga de AWS (altamente disponible, multi-AZ)
+#
+# Pre-requisito:
+# - AWS Load Balancer Controller instalado en el cluster
+# - IAM policy GovTech-ALB-Controller asignada al rol del controller
+# - Certificado SSL en ACM para HTTPS
+# ============================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: govtech-ingress
+  namespace: govtech
+  labels:
+    app: govtech
+    environment: production
+  annotations:
+    # ----------------------------------------
+    # TIPO DE INGRESS: AWS ALB
+    # ingress.class le dice al controller cual Ingress controller usar
+    # "alb" = AWS Load Balancer Controller
+    # ----------------------------------------
+    kubernetes.io/ingress.class: alb
+
+    # ----------------------------------------
+    # ESQUEMA: internet-facing = accesible desde internet
+    # La alternativa "internal" solo seria accesible dentro de la VPC
+    # ----------------------------------------
+    alb.ingress.kubernetes.io/scheme: internet-facing
+
+    # ----------------------------------------
+    # TARGET TYPE: ip
+    # El ALB envia trafico directamente a la IP del pod (no al nodo)
+    # Mas eficiente y no requiere NodePort
+    # ----------------------------------------
+    alb.ingress.kubernetes.io/target-type: ip
+
+    # ----------------------------------------
+    # CERTIFICADO SSL (ACM)
+    # ARN del certificado SSL/TLS para HTTPS
+    # Reemplazar con el ARN real de tu certificado en ACM
+    # aws acm list-certificates --region us-east-1
+    # ----------------------------------------
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-1:835960996869:certificate/CERTIFICATE_ARN_HERE
+
+    # ----------------------------------------
+    # PUERTOS: HTTP (80) y HTTPS (443)
+    # ----------------------------------------
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+
+    # ----------------------------------------
+    # SSL REDIRECT: redirigir HTTP → HTTPS automaticamente
+    # ----------------------------------------
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+
+    # ----------------------------------------
+    # HEALTH CHECK para el ALB
+    # El ALB verifica que los pods esten sanos antes de enviarles trafico
+    # ----------------------------------------
+    alb.ingress.kubernetes.io/healthcheck-path: /api/health
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: "30"
+    alb.ingress.kubernetes.io/healthcheck-timeout-seconds: "5"
+    alb.ingress.kubernetes.io/healthy-threshold-count: "2"
+    alb.ingress.kubernetes.io/unhealthy-threshold-count: "3"
+
+    # ----------------------------------------
+    # SUBNETS: subnets publicas donde vivira el ALB
+    # El controller las detecta automaticamente por el tag:
+    # kubernetes.io/role/elb=1 (creado en el modulo networking de Terraform)
+    # ----------------------------------------
+    alb.ingress.kubernetes.io/subnets: auto
+
+    # ----------------------------------------
+    # GRUPOS DE SEGURIDAD
+    # El controller crea un security group para el ALB automaticamente
+    # ----------------------------------------
+    alb.ingress.kubernetes.io/security-groups: auto
+
+    # ----------------------------------------
+    # TAGS para el ALB (para identificar en consola AWS)
+    # ----------------------------------------
+    alb.ingress.kubernetes.io/tags: "Project=govtech,Environment=production,ManagedBy=kubernetes"
+
+spec:
+  # ----------------------------------------
+  # REGLAS DE ENRUTAMIENTO
+  # El orden importa: mas especifico primero
+  # ----------------------------------------
+  rules:
+    - host: govtech.example.com  # Reemplazar con el dominio real
+      http:
+        paths:
+          # Trafico a /api/* va al backend (Node.js)
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: backend-service
+                port:
+                  number: 80
+
+          # TODO el demas trafico va al frontend (React/Nginx)
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend-service
+                port:
+                  number: 80
+
+# ============================================================
+# DESPUES DE APLICAR ESTE YAML:
+#
+# 1. El controller crea el ALB en AWS (tarda ~2-3 minutos)
+# 2. Verificar que el ALB fue creado:
+#    kubectl get ingress govtech-ingress -n govtech
+#    (la columna ADDRESS mostrara el DNS del ALB)
+#
+# 3. Si usas un dominio real, crear registro CNAME en Route53:
+#    govtech.example.com → <DNS_DEL_ALB>
+#
+# 4. Verificar acceso:
+#    curl https://govtech.example.com/api/health
+# ============================================================

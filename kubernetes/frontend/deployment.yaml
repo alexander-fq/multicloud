@@ -1,0 +1,112 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: govtech
+  labels:
+    app: frontend
+    tier: presentation
+    component: web
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: frontend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: frontend
+        tier: presentation
+        component: web
+        version: blue
+    spec:
+      containers:
+      - name: frontend
+        image: 835960996869.dkr.ecr.us-east-1.amazonaws.com/govtech-frontend:latest
+        imagePullPolicy: Always
+        ports:
+        - name: http
+          containerPort: 80
+          protocol: TCP
+
+        # Variables de entorno desde ConfigMap (si el frontend las necesita)
+        envFrom:
+        - configMapRef:
+            name: govtech-config
+
+        # Variables específicas del frontend
+        env:
+        - name: REACT_APP_API_URL
+          value: "http://backend-service"
+        - name: REACT_APP_ENV
+          valueFrom:
+            configMapKeyRef:
+              name: govtech-config
+              key: NODE_ENV
+
+        # Liveness Probe - ¿El contenedor está vivo?
+        # Frontend sirve archivos estáticos con nginx
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+            scheme: HTTP
+          initialDelaySeconds: 15    # Frontend arranca más rápido que backend
+          periodSeconds: 10
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 3
+
+        # Readiness Probe - ¿El contenedor está listo?
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+            scheme: HTTP
+          initialDelaySeconds: 5     # Nginx arranca muy rápido
+          periodSeconds: 5
+          timeoutSeconds: 2
+          successThreshold: 1
+          failureThreshold: 3
+
+        # Recursos - Frontend necesita menos recursos que backend
+        resources:
+          requests:
+            memory: "128Mi"   # 128 MB mínimo (archivos estáticos)
+            cpu: "100m"       # 0.1 cores (10% de CPU)
+          limits:
+            memory: "256Mi"   # 256 MB máximo
+            cpu: "200m"       # 0.2 cores (20% de CPU)
+
+        # Security Context
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 101      # Usuario nginx
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+
+        # Volume mounts para nginx (necesita escribir archivos temporales)
+        volumeMounts:
+        - name: cache
+          mountPath: /var/cache/nginx
+        - name: run
+          mountPath: /var/run
+
+      # Volumes temporales para nginx
+      volumes:
+      - name: cache
+        emptyDir: {}
+      - name: run
+        emptyDir: {}
+
+      restartPolicy: Always
+      dnsPolicy: ClusterFirst
+      terminationGracePeriodSeconds: 30
