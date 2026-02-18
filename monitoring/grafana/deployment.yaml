@@ -1,0 +1,214 @@
+# ============================================================
+# Grafana Deployment
+# Colaborador C - Semana 4
+#
+# NOTA: Este deployment es para instalacion manual/standalone.
+# Si usas el chart kube-prometheus-stack (recomendado),
+# Grafana ya viene incluido y NO necesitas este archivo.
+#
+# Usar este archivo si:
+# - No tienes Helm instalado
+# - Quieres una instalacion minima de Grafana sin Prometheus stack completo
+# ============================================================
+
+# --- Namespace para monitoring ---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+  labels:
+    name: monitoring
+
+---
+
+# --- ConfigMap con datasources de Grafana ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: monitoring
+data:
+  # Grafana carga automaticamente los datasources de este directorio al arrancar
+  prometheus.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus-service.monitoring.svc.cluster.local:9090
+        isDefault: true
+        editable: false
+
+---
+
+# --- ConfigMap con dashboards pre-cargados ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-providers
+  namespace: monitoring
+data:
+  dashboards.yaml: |
+    apiVersion: 1
+    providers:
+      - name: 'govtech'
+        orgId: 1
+        folder: 'GovTech'
+        type: file
+        disableDeletion: true
+        options:
+          path: /var/lib/grafana/dashboards
+
+---
+
+# --- PVC para datos de Grafana (dashboards, usuarios, configuracion) ---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: grafana-storage
+  namespace: monitoring
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: gp2
+  resources:
+    requests:
+      storage: 5Gi
+
+---
+
+# --- Secret con credenciales de Grafana ---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: grafana-credentials
+  namespace: monitoring
+type: Opaque
+stringData:
+  # CAMBIAR antes de desplegar en produccion
+  # En prod: usar AWS Secrets Manager o External Secrets Operator
+  GF_SECURITY_ADMIN_USER: admin
+  GF_SECURITY_ADMIN_PASSWORD: "CHANGE_ME_IN_PRODUCTION"
+
+---
+
+# --- Deployment de Grafana ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: monitoring
+  labels:
+    app: grafana
+spec:
+  replicas: 1  # Grafana con PVC no puede tener mas de 1 replica (WriteOnce)
+  selector:
+    matchLabels:
+      app: grafana
+
+  template:
+    metadata:
+      labels:
+        app: grafana
+    spec:
+      securityContext:
+        fsGroup: 472   # GID del usuario grafana en la imagen oficial
+        runAsUser: 472
+
+      containers:
+        - name: grafana
+          image: grafana/grafana:10.2.3
+
+          ports:
+            - name: grafana
+              containerPort: 3000
+
+          env:
+            - name: GF_SECURITY_ADMIN_USER
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-credentials
+                  key: GF_SECURITY_ADMIN_USER
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-credentials
+                  key: GF_SECURITY_ADMIN_PASSWORD
+            # Configuracion adicional via variables de entorno
+            - name: GF_USERS_ALLOW_SIGN_UP
+              value: "false"   # No permitir registro de nuevos usuarios
+            - name: GF_AUTH_ANONYMOUS_ENABLED
+              value: "false"   # No acceso anonimo
+            - name: GF_SERVER_ROOT_URL
+              value: "http://localhost:3000"  # Cambiar por URL real en prod
+
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "200m"
+
+          volumeMounts:
+            # Datos persistentes (dashboards, usuarios, configuracion)
+            - name: grafana-storage
+              mountPath: /var/lib/grafana
+            # Datasources auto-cargados al arrancar
+            - name: grafana-datasources
+              mountPath: /etc/grafana/provisioning/datasources
+              readOnly: true
+            # Dashboard providers
+            - name: grafana-dashboard-providers
+              mountPath: /etc/grafana/provisioning/dashboards
+              readOnly: true
+
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+
+      volumes:
+        - name: grafana-storage
+          persistentVolumeClaim:
+            claimName: grafana-storage
+        - name: grafana-datasources
+          configMap:
+            name: grafana-datasources
+        - name: grafana-dashboard-providers
+          configMap:
+            name: grafana-dashboard-providers
+
+---
+
+# --- Service para Grafana ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana-service
+  namespace: monitoring
+  labels:
+    app: grafana
+spec:
+  type: ClusterIP  # Solo accesible dentro del cluster
+  selector:
+    app: grafana
+  ports:
+    - name: grafana
+      port: 3000
+      targetPort: 3000
+      protocol: TCP
+
+# Para acceder a Grafana desde tu maquina local:
+#   kubectl port-forward service/grafana-service 3000:3000 -n monitoring
+# Luego abrir: http://localhost:3000
