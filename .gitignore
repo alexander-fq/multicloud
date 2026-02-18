@@ -64,8 +64,8 @@ coverage/
 *.db
 data/
 
-# Docker
-.dockerignore
+# Docker (secrets, no config files)
+# .dockerignore es un archivo de configuracion y SI debe commitearse
 
 # Kubernetes secrets
 *secret*.yaml
