@@ -1,0 +1,65 @@
+# ============================================================
+# HPA: Frontend Autoscaler
+# Colaborador B - Semana 3
+#
+# El frontend (Nginx sirviendo React) es principalmente I/O-bound:
+# - Sirve archivos estaticos (HTML, JS, CSS) - muy poco CPU
+# - Actua como proxy para /api - un poco mas de CPU
+# - La memoria es bastante estable (nginx es muy eficiente)
+#
+# Por eso usamos thresholds mas altos que el backend:
+# - CPU target: 80% (nginx puede manejar mucha carga con poco CPU)
+# - Memory target: 85%
+# - Scale down mas agresivo (stateless, no hay riesgo)
+# ============================================================
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: frontend-hpa
+  namespace: govtech
+  labels:
+    app: frontend
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: frontend
+
+  minReplicas: 2   # Minimo 2 para alta disponibilidad
+  maxReplicas: 8   # El frontend necesita menos replicas que el backend
+
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 80  # Nginx es eficiente, podemos ir mas alto
+
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 85
+
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 30  # Frontend puede escalar mas rapido
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 60
+        - type: Percent
+          value: 100  # Duplicar si es necesario
+          periodSeconds: 60
+      selectPolicy: Max
+
+    scaleDown:
+      # Frontend es stateless: podemos bajar mas rapido que el backend
+      stabilizationWindowSeconds: 120  # 2 min (vs 5 min del backend)
+      policies:
+        - type: Pods
+          value: 2           # Bajar hasta 2 pods a la vez
+          periodSeconds: 60
+      selectPolicy: Min

@@ -1,0 +1,150 @@
+# ============================================================
+# StatefulSet: PostgreSQL
+# Colaborador B - Semana 3
+#
+# Por que StatefulSet y no Deployment?
+# - Deployment: pods son identicos e intercambiables (sin estado)
+# - StatefulSet: pods tienen identidad unica y almacenamiento persistente
+#
+# Para una base de datos NECESITAMOS:
+# 1. Nombre estable: postgres-0, postgres-1 (no aleatorio)
+# 2. Almacenamiento persistente: el volumen sigue al pod
+# 3. Orden de arranque: postgres-0 arranca primero (primary)
+# ============================================================
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: govtech
+  labels:
+    app: postgres
+    tier: database
+    version: "15"
+spec:
+  # Solo 1 replica en dev - en prod usariamos un operador como CloudNativePG
+  replicas: 1
+  serviceName: postgres  # Nombre del headless service (obligatorio en StatefulSet)
+
+  selector:
+    matchLabels:
+      app: postgres
+
+  # ----------------------------------------
+  # VOLUME CLAIM TEMPLATE
+  # A diferencia de Deployment, StatefulSet crea un PVC
+  # por cada pod automaticamente con nombre predecible:
+  # postgres-data-postgres-0, postgres-data-postgres-1, etc.
+  # ----------------------------------------
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-data
+      spec:
+        accessModes:
+          - ReadWriteOnce  # Un solo pod puede montar este volumen (normal para DB)
+        storageClassName: gp2  # Clase de almacenamiento de AWS EBS
+        resources:
+          requests:
+            storage: 20Gi  # 20 GB inicial (suficiente para dev)
+
+  template:
+    metadata:
+      labels:
+        app: postgres
+        tier: database
+    spec:
+      # Termination grace period: tiempo para que postgres guarde datos antes de morir
+      # PostgreSQL necesita tiempo para hacer checkpoint y cerrar conexiones
+      terminationGracePeriodSeconds: 60
+
+      # Contexto de seguridad del pod
+      securityContext:
+        fsGroup: 999  # GID del usuario postgres en la imagen oficial
+        runAsNonRoot: true
+
+      containers:
+        - name: postgres
+          image: postgres:15-alpine
+          imagePullPolicy: IfNotPresent
+
+          # Contexto de seguridad del contenedor
+          securityContext:
+            runAsUser: 999   # UID del usuario postgres
+            runAsGroup: 999
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false  # Postgres necesita escribir en /var/run
+
+          ports:
+            - name: postgres
+              containerPort: 5432
+              protocol: TCP
+
+          # Variables de entorno desde el Secret (creado en Semana 1)
+          env:
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: govtech-secrets
+                  key: DB_NAME
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: govtech-secrets
+                  key: DB_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: govtech-secrets
+                  key: DB_PASSWORD
+            # Directorio de datos de PostgreSQL (debe coincidir con el volumen)
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+
+          # ----------------------------------------
+          # RECURSOS
+          # requests: lo minimo que necesita para arrancar
+          # limits: el maximo que puede usar (si pasa, lo matan)
+          # ----------------------------------------
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"    # 0.25 CPU cores
+            limits:
+              memory: "512Mi"
+              cpu: "500m"    # 0.5 CPU cores
+
+          # Montar el volumen persistente en el directorio de datos
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+
+          # ----------------------------------------
+          # HEALTH CHECKS
+          # liveness: si falla N veces, reinicia el pod
+          # readiness: si falla, saca el pod del Service (no le manda trafico)
+          # ----------------------------------------
+          livenessProbe:
+            exec:
+              # pg_isready verifica si postgres acepta conexiones
+              command:
+                - pg_isready
+                - -U
+                - $(POSTGRES_USER)
+                - -d
+                - $(POSTGRES_DB)
+            initialDelaySeconds: 30  # Esperar 30s antes del primer check (postgres tarda en arrancar)
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          readinessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - $(POSTGRES_USER)
+                - -d
+                - $(POSTGRES_DB)
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3

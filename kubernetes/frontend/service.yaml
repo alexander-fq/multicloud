@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-service
+  namespace: govtech
+  labels:
+    app: frontend
+    tier: presentation
+    component: web
+spec:
+  # Tipo de servicio
+  # ClusterIP = solo accesible dentro del cluster
+  type: ClusterIP
+
+  # Selector - conecta con los pods que tienen estas etiquetas
+  selector:
+    app: frontend
+
+  # Puertos
+  ports:
+  - name: http
+    protocol: TCP
+    port: 80           # Puerto del servicio
+    targetPort: 80     # Puerto del contenedor (nginx escucha en 80)
+
+  # Session affinity
+  sessionAffinity: None

@@ -1,0 +1,75 @@
+# ============================================================
+# Service: PostgreSQL (Headless + ClusterIP)
+# Colaborador B - Semana 3
+#
+# Para StatefulSets se usan 2 tipos de Service:
+#
+# 1. HEADLESS SERVICE (clusterIP: None)
+#    - Necesario para que el StatefulSet funcione correctamente
+#    - Kubernetes crea DNS records individuales para cada pod:
+#      postgres-0.postgres.govtech.svc.cluster.local
+#    - Permite que la app se conecte al pod especifico (ej: el primary)
+#
+# 2. CLUSTER IP SERVICE (normal)
+#    - Para que el backend se conecte sin saber a que pod va
+#    - Siempre apunta al primary (postgres-0)
+#    - host: postgres.govtech.svc.cluster.local
+# ============================================================
+
+# --- HEADLESS SERVICE (requerido por StatefulSet) ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: govtech
+  labels:
+    app: postgres
+    tier: database
+spec:
+  # clusterIP: None = Headless
+  # No hay una IP virtual, el DNS resuelve directo a los pods
+  clusterIP: None
+
+  # publishNotReadyAddresses: true permite que los pods se descubran
+  # entre si aunque todavia no esten "ready" (necesario para replicacion)
+  publishNotReadyAddresses: true
+
+  selector:
+    app: postgres
+
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+      protocol: TCP
+
+---
+
+# --- SERVICE NORMAL (para el backend) ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-service
+  namespace: govtech
+  labels:
+    app: postgres
+    tier: database
+  annotations:
+    # Documentar que este service es para conexiones del backend
+    description: "Service para que el backend se conecte a PostgreSQL"
+spec:
+  type: ClusterIP  # Solo accesible dentro del cluster
+
+  selector:
+    app: postgres
+
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+      protocol: TCP
+
+# El backend se conecta usando:
+# Host: postgres-service.govtech.svc.cluster.local
+# Puerto: 5432
+# Configurado en kubernetes/configmap.yaml como DB_HOST

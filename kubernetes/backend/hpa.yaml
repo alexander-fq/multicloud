@@ -1,0 +1,85 @@
+# ============================================================
+# HPA: Backend Autoscaler
+# Colaborador B - Semana 3
+#
+# HPA = Horizontal Pod Autoscaler
+# Escala automaticamente el numero de pods segun la carga
+#
+# Como funciona:
+# 1. Metrics Server (instalado en EKS) recoge CPU/memoria de los pods
+# 2. HPA compara las metricas con los targets configurados
+# 3. Si la carga sube, aumenta el numero de replicas
+# 4. Si la carga baja, reduce el numero de replicas (cooldown de 5 min)
+#
+# Formula: replicas_deseadas = ceil(replicas_actuales * (metrica_actual / target))
+# Ejemplo: 2 pods al 80% CPU con target 50% → ceil(2 * 80/50) = ceil(3.2) = 4 pods
+# ============================================================
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: backend-hpa
+  namespace: govtech
+  labels:
+    app: backend
+spec:
+  # A que Deployment aplica este autoscaler
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: backend
+
+  # Limites de replicas
+  minReplicas: 2   # Siempre al menos 2 (alta disponibilidad)
+  maxReplicas: 10  # Maximo 10 pods (ajustar segun presupuesto)
+
+  metrics:
+    # ----------------------------------------
+    # METRICA 1: CPU
+    # Escalar cuando el uso promedio supera 70%
+    # 70% es conservador: deja margen antes de saturacion
+    # ----------------------------------------
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70  # Porcentaje promedio de todos los pods
+
+    # ----------------------------------------
+    # METRICA 2: MEMORIA
+    # Escalar cuando el uso promedio supera 80%
+    # Nota: escalar por memoria no siempre es ideal
+    # (la memoria no baja rapido al escalar)
+    # ----------------------------------------
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+
+  # ----------------------------------------
+  # POLITICAS DE ESCALADO
+  # Controlan la velocidad de scale up y scale down
+  # ----------------------------------------
+  behavior:
+    scaleUp:
+      # Al subir carga: escalar rapido para no perder requests
+      stabilizationWindowSeconds: 60  # Esperar 1 min para confirmar que la carga sube
+      policies:
+        - type: Pods
+          value: 2           # Agregar maximo 2 pods a la vez
+          periodSeconds: 60  # Cada 60 segundos
+        - type: Percent
+          value: 50          # O 50% mas de pods
+          periodSeconds: 60
+      selectPolicy: Max  # Usar la politica que resulte en mas pods (mas agresivo)
+
+    scaleDown:
+      # Al bajar carga: escalar lento para evitar oscilaciones
+      stabilizationWindowSeconds: 300  # Esperar 5 min para confirmar que la carga bajo
+      policies:
+        - type: Pods
+          value: 1           # Bajar maximo 1 pod a la vez
+          periodSeconds: 120 # Cada 2 minutos
+      selectPolicy: Min  # Politica mas conservadora al bajar
