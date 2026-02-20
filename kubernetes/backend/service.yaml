@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service
+  namespace: govtech
+  labels:
+    app: backend
+    tier: application
+    component: api
+spec:
+  # Tipo de servicio
+  # ClusterIP = solo accesible dentro del cluster (no tiene IP pública)
+  type: ClusterIP
+
+  # Selector - conecta con los pods que tienen estas etiquetas
+  selector:
+    app: backend
+
+  # Puertos
+  ports:
+  - name: http
+    protocol: TCP
+    port: 80           # Puerto del servicio (lo que otros servicios usan para conectarse)
+    targetPort: 3000   # Puerto del contenedor (donde realmente corre la app)
+
+  # Session affinity
+  # None = distribuye peticiones round-robin entre todos los pods
+  sessionAffinity: None

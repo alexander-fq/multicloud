@@ -1,0 +1,84 @@
+version: '3.8'
+
+# docker-compose para desarrollo local
+# Levanta toda la aplicacion con un solo comando: docker-compose up -d
+
+services:
+
+  # Base de datos PostgreSQL
+  # En produccion se usa RDS, aqui usamos contenedor para desarrollo
+  postgres:
+    image: postgres:15-alpine
+    container_name: govtech-db
+    environment:
+      POSTGRES_DB: govtech_dev
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - govtech-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Backend Node.js/Express
+  backend:
+    build:
+      context: ./app/backend
+      dockerfile: Dockerfile
+    container_name: govtech-backend
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      HOST: 0.0.0.0
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/govtech_dev
+      CLOUD_PROVIDER: aws
+      AWS_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_BUCKET: ${AWS_BUCKET:-govtech-documents}
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-production}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - govtech-network
+    volumes:
+      # Hot reload en desarrollo (monta codigo fuente)
+      - ./app/backend/src:/app/src
+    restart: unless-stopped
+
+  # Frontend React servido con Nginx
+  # context: . (raiz del proyecto) porque Dockerfile necesita acceder a docs/ terraform/ etc.
+  # para los imports ?raw de docsData.js
+  frontend:
+    build:
+      context: .
+      dockerfile: app/frontend/Dockerfile
+    container_name: govtech-frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    networks:
+      - govtech-network
+    restart: unless-stopped
+
+networks:
+  # Red compartida para que los servicios se comuniquen entre si
+  # backend usa hostname "postgres" para conectarse a la DB
+  # frontend usa hostname "backend" para proxy de /api (nginx.conf)
+  govtech-network:
+    driver: bridge
+
+volumes:
+  # Volumen para persistir datos de PostgreSQL entre reinicios
+  postgres_data:

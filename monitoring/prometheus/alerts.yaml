@@ -1,0 +1,160 @@
+# ============================================================
+# PrometheusRule: Alertas de Infraestructura
+# Colaborador C - Semana 3
+#
+# PrometheusRule es un recurso de Prometheus Operator
+# Define reglas de alerta en formato Prometheus PromQL
+# ============================================================
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: govtech-infrastructure-alerts
+  namespace: monitoring
+  labels:
+    release: prometheus  # Prometheus Operator lo descubre por este label
+spec:
+  groups:
+    # ========================
+    # ALERTAS: KUBERNETES
+    # ========================
+    - name: govtech.kubernetes
+      interval: 30s
+      rules:
+
+        # Pod reiniciandose muchas veces = crash loop
+        - alert: PodCrashLooping
+          expr: |
+            rate(kube_pod_container_status_restarts_total{
+              namespace="govtech"
+            }[15m]) * 60 * 15 > 3
+          for: 5m
+          labels:
+            severity: critical
+            namespace: govtech
+          annotations:
+            summary: "Pod en crash loop: {{ $labels.pod }}"
+            description: "El pod {{ $labels.pod }} se ha reiniciado mas de 3 veces en 15 minutos"
+            runbook: "kubectl describe pod {{ $labels.pod }} -n govtech"
+
+        # Pod en estado Pending por mas de 10 minutos
+        # (probablemente no hay recursos suficientes en los nodos)
+        - alert: PodPendingTooLong
+          expr: |
+            kube_pod_status_phase{
+              namespace="govtech",
+              phase="Pending"
+            } == 1
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Pod en estado Pending: {{ $labels.pod }}"
+            description: "El pod {{ $labels.pod }} lleva mas de 10 minutos en estado Pending. Posible falta de recursos."
+            runbook: "kubectl describe pod {{ $labels.pod }} -n govtech"
+
+        # Deployment con menos replicas de las deseadas
+        - alert: DeploymentReplicasMismatch
+          expr: |
+            kube_deployment_spec_replicas{namespace="govtech"}
+            !=
+            kube_deployment_status_available_replicas{namespace="govtech"}
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Deployment sin replicas suficientes: {{ $labels.deployment }}"
+            description: "{{ $labels.deployment }} tiene {{ $value }} replicas disponibles, se esperan mas"
+
+        # HPA en limite maximo (necesitamos mas capacidad)
+        - alert: HPAAtMaxReplicas
+          expr: |
+            kube_horizontalpodautoscaler_status_current_replicas{namespace="govtech"}
+            ==
+            kube_horizontalpodautoscaler_spec_max_replicas{namespace="govtech"}
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "HPA al maximo: {{ $labels.horizontalpodautoscaler }}"
+            description: "El autoscaler lleva 15 min en el maximo de replicas. Considerar aumentar maxReplicas."
+
+    # ========================
+    # ALERTAS: NODOS EKS
+    # ========================
+    - name: govtech.nodes
+      interval: 60s
+      rules:
+
+        # Nodo con CPU alta sostenida
+        - alert: NodeCPUHigh
+          expr: |
+            100 - (avg by (node) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "CPU alta en nodo {{ $labels.node }}"
+            description: "El nodo {{ $labels.node }} tiene mas de 85% de CPU por 10 minutos"
+
+        # Nodo con poca memoria disponible (<10%)
+        - alert: NodeMemoryLow
+          expr: |
+            (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 < 10
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Memoria baja en nodo {{ $labels.node }}"
+            description: "El nodo {{ $labels.node }} tiene menos de 10% de memoria disponible"
+
+        # Disco del nodo casi lleno (>85%)
+        - alert: NodeDiskAlmostFull
+          expr: |
+            (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"} /
+             node_filesystem_size_bytes{fstype!~"tmpfs|overlay"}) * 100 < 15
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Disco casi lleno en nodo {{ $labels.node }}"
+            description: "El disco {{ $labels.mountpoint }} en {{ $labels.node }} tiene menos de 15% disponible"
+
+    # ========================
+    # ALERTAS: BASE DE DATOS
+    # ========================
+    - name: govtech.database
+      interval: 60s
+      rules:
+
+        # Pod de postgres no disponible
+        - alert: PostgresDown
+          expr: |
+            kube_pod_status_ready{
+              namespace="govtech",
+              pod=~"postgres-.*"
+            } == 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "PostgreSQL no disponible"
+            description: "El pod de PostgreSQL no esta en estado Ready. Verificar logs."
+            runbook: "kubectl logs postgres-0 -n govtech --previous"
+
+        # PVC de postgres casi lleno (>80%)
+        - alert: PostgresStorageHigh
+          expr: |
+            kubelet_volume_stats_used_bytes{
+              namespace="govtech",
+              persistentvolumeclaim=~"postgres-data-.*"
+            } /
+            kubelet_volume_stats_capacity_bytes{
+              namespace="govtech",
+              persistentvolumeclaim=~"postgres-data-.*"
+            } * 100 > 80
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Almacenamiento de PostgreSQL alto"
+            description: "El volumen de PostgreSQL esta al {{ $value }}% de capacidad. Considerar expansion del PVC."

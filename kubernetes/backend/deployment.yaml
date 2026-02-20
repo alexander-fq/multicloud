@@ -1,0 +1,98 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: govtech
+  labels:
+    app: backend
+    tier: application
+    component: api
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: backend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: backend
+        tier: application
+        component: api
+        version: blue
+    spec:
+      containers:
+      - name: backend
+        image: 835960996869.dkr.ecr.us-east-1.amazonaws.com/govtech-backend:latest
+        imagePullPolicy: Always
+        ports:
+        - name: http
+          containerPort: 3000
+          protocol: TCP
+
+        # Variables de entorno desde ConfigMap
+        envFrom:
+        - configMapRef:
+            name: govtech-config
+        - secretRef:
+            name: govtech-secrets
+
+        # Liveness Probe - ¿El contenedor está vivo?
+        # Si falla 3 veces, Kubernetes REINICIA el pod
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+            scheme: HTTP
+          initialDelaySeconds: 30    # Espera 30 segundos después de arrancar
+          periodSeconds: 10           # Verifica cada 10 segundos
+          timeoutSeconds: 5           # Timeout de 5 segundos por request
+          successThreshold: 1         # 1 éxito = está vivo
+          failureThreshold: 3         # 3 fallos = reiniciar pod
+
+        # Readiness Probe - ¿El contenedor está listo para recibir tráfico?
+        # Si falla, Kubernetes NO envía tráfico (pero no reinicia)
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+            scheme: HTTP
+          initialDelaySeconds: 10     # Espera 10 segundos después de arrancar
+          periodSeconds: 5            # Verifica cada 5 segundos
+          timeoutSeconds: 3           # Timeout de 3 segundos
+          successThreshold: 1         # 1 éxito = listo para tráfico
+          failureThreshold: 3         # 3 fallos = quitar del balanceo
+
+        # Recursos - CPU y Memoria
+        resources:
+          # Requests = mínimo garantizado
+          requests:
+            memory: "256Mi"   # 256 megabytes mínimo
+            cpu: "250m"       # 0.25 cores (25% de CPU) mínimo
+          # Limits = máximo permitido
+          limits:
+            memory: "512Mi"   # 512 megabytes máximo
+            cpu: "500m"       # 0.5 cores (50% de CPU) máximo
+
+        # Security Context - No correr como root
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          capabilities:
+            drop:
+            - ALL
+
+      # Restart policy
+      restartPolicy: Always
+
+      # DNS policy
+      dnsPolicy: ClusterFirst
+
+      # Termination grace period (para shutdown graceful)
+      terminationGracePeriodSeconds: 30

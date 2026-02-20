@@ -63,9 +63,11 @@ coverage/
 *.sqlite
 *.db
 data/
+# Excepcion: carpeta de datos del frontend (docsData.js, etc.)
+!app/frontend/src/data/
 
-# Docker
-.dockerignore
+# Docker (secrets, no config files)
+# .dockerignore es un archivo de configuracion y SI debe commitearse
 
 # Kubernetes secrets
 *secret*.yaml
@@ -80,3 +82,12 @@ aws/iam/*.csv
 # IAM Access Keys
 *access-key*.json
 *access_key*.json
+
+# Windows Zone.Identifier metadata files (generados por Windows al descargar archivos)
+*.zip:Zone.Identifier
+*:Zone.Identifier
+
+# Archivos HTML de demo/prototipo temporal en raiz del proyecto
+demo.html
+demo-config.html
+health.html
