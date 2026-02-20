@@ -57,10 +57,12 @@ services:
     restart: unless-stopped
 
   # Frontend React servido con Nginx
+  # context: . (raiz del proyecto) porque Dockerfile necesita acceder a docs/ terraform/ etc.
+  # para los imports ?raw de docsData.js
   frontend:
     build:
-      context: ./app/frontend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: app/frontend/Dockerfile
     container_name: govtech-frontend
     ports:
       - "5173:80"
@@ -73,7 +75,7 @@ services:
 networks:
   # Red compartida para que los servicios se comuniquen entre si
   # backend usa hostname "postgres" para conectarse a la DB
-  # frontend usa hostname "backend-service" para proxy de /api
+  # frontend usa hostname "backend" para proxy de /api (nginx.conf)
   govtech-network:
     driver: bridge
 

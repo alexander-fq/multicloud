@@ -1,9 +1,17 @@
 # IAM Security Policies - Mínimo Privilegio
 
 **Proyecto**: GovTech Cloud Migration Platform
-**Versión**: 1.0
-**Fecha**: 2026-02-10
+**Versión**: 2.0
+**Fecha**: 2026-02-13
+**Última actualización**: 2026-02-13
 **Principio**: Least Privilege (Mínimo Privilegio)
+
+**Cambios en v2.0**:
+- Eliminación de Permission Boundaries (bloqueaban acceso a consola web)
+- Adición de ReadOnlyAccess para acceso a AWS Console
+- Adición de AWSCloudShellFullAccess para todos los colaboradores
+- 4 nuevas políticas custom para completar permisos faltantes
+- Actualización de matriz de permisos y procedimientos
 
 ---
 
@@ -153,30 +161,39 @@
 AWS Account: 835960996869
 │
 ├── Group: GovTech-Infrastructure
-│   ├── Members: [Colaborador A]
+│   ├── Members: [collab-infrastructure]
 │   └── Policies:
 │       ├── AWS Managed: AmazonEC2FullAccess
 │       ├── AWS Managed: AmazonVPCFullAccess
 │       ├── AWS Managed: AmazonEKSClusterPolicy
+│       ├── AWS Managed: ReadOnlyAccess (NUEVO v2.0 - Acceso consola web)
+│       ├── AWS Managed: AWSCloudShellFullAccess (NUEVO v2.0)
 │       ├── Custom: GovTech-ECR-Admin
 │       ├── Custom: GovTech-Terraform-State
-│       └── Custom: GovTech-RDS-Admin
+│       ├── Custom: GovTech-RDS-Admin
+│       ├── Custom: GovTech-IAM-EKS-Roles (NUEVO v2.0 - Crear roles IAM para EKS)
+│       └── Custom: GovTech-S3-Admin (NUEVO v2.0 - Gestión completa S3)
 │
 ├── Group: GovTech-Deployment
-│   ├── Members: [Colaborador B]
+│   ├── Members: [collab-deployment]
 │   └── Policies:
 │       ├── AWS Managed: AmazonEKSWorkerNodePolicy
 │       ├── AWS Managed: AmazonEKS_CNI_Policy
+│       ├── AWS Managed: ReadOnlyAccess (NUEVO v2.0 - Acceso consola web)
+│       ├── AWS Managed: AWSCloudShellFullAccess (NUEVO v2.0)
 │       ├── Custom: GovTech-EKS-Deploy
 │       ├── Custom: GovTech-ECR-ReadOnly
-│       └── Custom: GovTech-Secrets-Read
+│       ├── Custom: GovTech-Secrets-Read
+│       ├── Custom: GovTech-ALB-Controller (NUEVO v2.0 - AWS Load Balancer)
+│       └── Custom: GovTech-AutoScaling (NUEVO v2.0 - HPA y Auto Scaling)
 │
 ├── Group: GovTech-DevOps
-│   ├── Members: [Colaborador C]
+│   ├── Members: [collab-devops]
 │   └── Policies:
 │       ├── AWS Managed: CloudWatchFullAccess
+│       ├── AWS Managed: ReadOnlyAccess (NUEVO v2.0 - Acceso consola web)
+│       ├── AWS Managed: AWSCloudShellFullAccess (NUEVO v2.0)
 │       ├── Custom: GovTech-CICD-Access
-│       ├── Custom: GovTech-ECR-Push
 │       └── Custom: GovTech-Monitoring
 │
 └── User: root-admin
@@ -304,6 +321,85 @@ AWS Account: 835960996869
 ```
 **Qué permite**: Crear/modificar instancias RDS en us-east-1
 **Qué NO permite**: Eliminar bases de datos de producción (protegidas por tag)
+
+---
+
+**4. GovTech-IAM-EKS-Roles** (NUEVO v2.0)
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "EKSRoleManagement",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateRole",
+        "iam:DeleteRole",
+        "iam:GetRole",
+        "iam:AttachRolePolicy",
+        "iam:DetachRolePolicy",
+        "iam:PassRole"
+      ],
+      "Resource": [
+        "arn:aws:iam::835960996869:role/eks-*",
+        "arn:aws:iam::835960996869:role/govtech-*"
+      ]
+    },
+    {
+      "Sid": "EKSOIDCProvider",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateOpenIDConnectProvider",
+        "iam:DeleteOpenIDConnectProvider",
+        "iam:GetOpenIDConnectProvider"
+      ],
+      "Resource": "arn:aws:iam::835960996869:oidc-provider/*"
+    }
+  ]
+}
+```
+**Qué permite**: Crear IAM roles necesarios para EKS cluster y worker nodes, crear OIDC providers
+**Qué NO permite**: Crear/modificar usuarios IAM, crear políticas fuera del scope eks-* y govtech-*
+**Por qué se agregó**: Colaborador A no podía crear el cluster EKS en Semana 2 sin estos permisos
+
+---
+
+**5. GovTech-S3-Admin** (NUEVO v2.0)
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "S3BucketManagement",
+      "Effect": "Allow",
+      "Action": [
+        "s3:CreateBucket",
+        "s3:DeleteBucket",
+        "s3:PutBucketVersioning",
+        "s3:PutEncryptionConfiguration",
+        "s3:PutLifecycleConfiguration",
+        "s3:PutBucketPolicy",
+        "s3:PutBucketCORS",
+        "s3:*"
+      ],
+      "Resource": "arn:aws:s3:::govtech-*"
+    },
+    {
+      "Sid": "S3ObjectManagement",
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject",
+        "s3:GetObject",
+        "s3:DeleteObject"
+      ],
+      "Resource": "arn:aws:s3:::govtech-*/*"
+    }
+  ]
+}
+```
+**Qué permite**: Crear y gestionar buckets S3 con prefijo govtech-*, configurar versionado, encriptación, CORS
+**Qué NO permite**: Acceder a buckets de otras aplicaciones, eliminar buckets sin prefijo govtech-*
+**Por qué se agregó**: GovTech-Terraform-State solo permitía acceso al bucket de Terraform state, no podía crear buckets para la aplicación (storage module Semana 3)
 
 ---
 
@@ -435,6 +531,98 @@ AWS Account: 835960996869
 
 ---
 
+**4. GovTech-ALB-Controller** (NUEVO v2.0)
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "LoadBalancerManagement",
+      "Effect": "Allow",
+      "Action": [
+        "elasticloadbalancing:CreateLoadBalancer",
+        "elasticloadbalancing:DeleteLoadBalancer",
+        "elasticloadbalancing:CreateTargetGroup",
+        "elasticloadbalancing:CreateListener",
+        "elasticloadbalancing:ModifyLoadBalancerAttributes",
+        "elasticloadbalancing:Describe*"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "EC2NetworkingForALB",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:DescribeSubnets",
+        "ec2:DescribeSecurityGroups",
+        "ec2:CreateTags"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ACMCertificateAccess",
+      "Effect": "Allow",
+      "Action": [
+        "acm:ListCertificates",
+        "acm:DescribeCertificate"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "IAMPassRoleForALB",
+      "Effect": "Allow",
+      "Action": ["iam:PassRole"],
+      "Resource": "arn:aws:iam::835960996869:role/eks-*",
+      "Condition": {
+        "StringEquals": {
+          "iam:PassedToService": "elasticloadbalancing.amazonaws.com"
+        }
+      }
+    }
+  ]
+}
+```
+**Qué permite**: Crear Application Load Balancers, Target Groups, Listeners para Ingress de Kubernetes
+**Qué NO permite**: Modificar load balancers de producción sin tag específico
+**Por qué se agregó**: Colaborador B no podía crear Ingress con ALB en Semana 4, bloqueante crítico para exponer aplicación
+
+---
+
+**5. GovTech-AutoScaling** (NUEVO v2.0)
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AutoScalingGroupManagement",
+      "Effect": "Allow",
+      "Action": [
+        "autoscaling:DescribeAutoScalingGroups",
+        "autoscaling:PutScalingPolicy",
+        "autoscaling:DescribePolicies",
+        "autoscaling:SetDesiredCapacity"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "CloudWatchAlarmsForHPA",
+      "Effect": "Allow",
+      "Action": [
+        "cloudwatch:PutMetricAlarm",
+        "cloudwatch:DescribeAlarms",
+        "cloudwatch:DeleteAlarms"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+```
+**Qué permite**: Configurar Horizontal Pod Autoscaler (HPA), crear políticas de auto-scaling, CloudWatch alarms
+**Qué NO permite**: Modificar Auto Scaling Groups manualmente, solo via HPA
+**Por qué se agregó**: Colaborador B no podía configurar HPA en Semana 3, funcionalidad reducida de auto-scaling
+
+---
+
 ### Colaborador C: DevOps Team
 
 #### Custom Policies
@@ -534,15 +722,21 @@ AWS Account: 835960996869
 | Servicio AWS | Root | Colab A (Infra) | Colab B (Deploy) | Colab C (DevOps) |
 |--------------|------|-----------------|------------------|------------------|
 | **IAM Users** | Full | - | - | - |
-| **IAM Roles** | Full | Create (EKS) | - | Create (CICD) |
+| **IAM Roles** | Full | Create (EKS/EC2) | PassRole (ALB) | Create (CICD) |
+| **IAM OIDC** | Full | Create (EKS) | - | - |
 | **EC2** | Full | Full | Read-only | Read-only |
 | **VPC** | Full | Full | - | - |
 | **EKS** | Full | Create/Modify | kubectl access | Read-only |
 | **ECR** | Full | Push/Pull | Pull-only | Push/Pull (CI) |
 | **RDS** | Full | Create/Modify | - | - |
-| **S3** | Full | Terraform state | - | Artifacts |
+| **S3** | Full | Full (govtech-*) | - | Artifacts |
+| **ELB/ALB** | Full | - | Create/Modify | - |
+| **Auto Scaling** | Full | - | Policies/HPA | - |
+| **ACM** | Full | - | Read (certs) | - |
 | **Secrets Manager** | Full | - | Read (dev/stg) | Full (CICD secrets) |
-| **CloudWatch** | Full | Logs | Logs | Full |
+| **CloudWatch** | Full | Logs | Logs + Alarms | Full |
+| **CloudShell** | Full | Full | Full | Full |
+| **Console Access** | Full | Read-only | Read-only | Read-only |
 | **Billing** | Full | - | - | - |
 
 **Leyenda**:
@@ -555,13 +749,36 @@ AWS Account: 835960996869
 
 ## Boundary Policies
 
-### ¿Qué son?
+### IMPORTANTE: Permission Boundaries REMOVIDAS en v2.0
+
+**Razón de remoción**: Las Permission Boundaries estaban bloqueando el acceso a la consola web de AWS.
+
+**Problema identificado**:
+```
+DenyRegionOutsideUSEast1 bloqueaba servicios globales como:
+- IAM (global, no tiene región)
+- CloudFront (global)
+- Route53 (global)
+- AWS Console login (global)
+
+Resultado: Usuarios no podían iniciar sesión en AWS Console
+```
+
+**Solución implementada**:
+- Eliminadas Permission Boundaries de todos los usuarios
+- Confiamos en las políticas restrictivas por grupo (Least Privilege)
+- Agregada ReadOnlyAccess para navegación básica de consola
+- Mantenemos auditoría con CloudTrail
+
+**Nota**: Si en el futuro se requieren Boundaries, usar solo para restricciones específicas, NO para regiones.
+
+### ¿Qué son? (Referencia histórica)
 
 **Permission Boundaries** son límites MÁXIMOS que un usuario NO puede sobrepasar, incluso si tiene políticas que lo permiten.
 
 **Uso**: Prevenir escalación de privilegios.
 
-### Boundary Policy para Todos los Colaboradores
+### Boundary Policy Original (DESHABILITADA - Solo referencia)
 
 ```json
 {
@@ -742,21 +959,31 @@ Attach policies:
   - AmazonEC2FullAccess (AWS Managed)
   - AmazonVPCFullAccess (AWS Managed)
   - AmazonEKSClusterPolicy (AWS Managed)
+  - ReadOnlyAccess (AWS Managed) ← NUEVO v2.0
+  - AWSCloudShellFullAccess (AWS Managed) ← NUEVO v2.0
   - GovTech-ECR-Admin (Custom)
   - GovTech-Terraform-State (Custom)
   - GovTech-RDS-Admin (Custom)
+  - GovTech-IAM-EKS-Roles (Custom) ← NUEVO v2.0
+  - GovTech-S3-Admin (Custom) ← NUEVO v2.0
 
 # Grupo: GovTech-Deployment
 Attach policies:
   - AmazonEKSWorkerNodePolicy (AWS Managed)
   - AmazonEKS_CNI_Policy (AWS Managed)
+  - ReadOnlyAccess (AWS Managed) ← NUEVO v2.0
+  - AWSCloudShellFullAccess (AWS Managed) ← NUEVO v2.0
   - GovTech-EKS-Deploy (Custom)
   - GovTech-ECR-ReadOnly (Custom)
   - GovTech-Secrets-Read (Custom)
+  - GovTech-ALB-Controller (Custom) ← NUEVO v2.0
+  - GovTech-AutoScaling (Custom) ← NUEVO v2.0
 
 # Grupo: GovTech-DevOps
 Attach policies:
   - CloudWatchFullAccess (AWS Managed)
+  - ReadOnlyAccess (AWS Managed) ← NUEVO v2.0
+  - AWSCloudShellFullAccess (AWS Managed) ← NUEVO v2.0
   - GovTech-CICD-Access (Custom)
   - GovTech-Monitoring (Custom)
 ```
@@ -785,13 +1012,9 @@ Attach policies:
 
 ### Paso 5: Aplicar Boundary Policy
 
-```bash
-# Para cada usuario creado
-1. IAM → Users → [username]
-2. Permissions tab → Set permissions boundary
-3. Select: GovTech-PermissionBoundary
-4. Save
-```
+**DESHABILITADO en v2.0** - Las Permission Boundaries fueron removidas porque bloqueaban acceso a la consola web.
+
+Si deseas implementar boundaries en el futuro, asegúrate de NO bloquear servicios globales (IAM, CloudFront, Console login).
 
 ---
 
@@ -1009,9 +1232,101 @@ aws iam create-access-key --user-name collab-infrastructure
 
 ---
 
+---
+
+## Changelog - Versión 2.0 (2026-02-13)
+
+### Cambios Realizados
+
+#### 1. Eliminación de Permission Boundaries
+**Fecha**: 2026-02-12
+**Razón**: Bloqueaban acceso a AWS Console (servicios globales)
+**Comando ejecutado**:
+```bash
+aws iam delete-user-permissions-boundary --user-name collab-infrastructure
+aws iam delete-user-permissions-boundary --user-name collab-deployment
+aws iam delete-user-permissions-boundary --user-name collab-devops
+```
+
+#### 2. Adición de ReadOnlyAccess
+**Fecha**: 2026-02-12
+**Razón**: Permitir acceso básico a AWS Console web para todos los colaboradores
+**Comando ejecutado**:
+```bash
+aws iam attach-group-policy --group-name GovTech-Infrastructure --policy-arn arn:aws:iam::aws:policy/ReadOnlyAccess
+aws iam attach-group-policy --group-name GovTech-Deployment --policy-arn arn:aws:iam::aws:policy/ReadOnlyAccess
+aws iam attach-group-policy --group-name GovTech-DevOps --policy-arn arn:aws:iam::aws:policy/ReadOnlyAccess
+```
+
+#### 3. Adición de AWSCloudShellFullAccess
+**Fecha**: 2026-02-12
+**Razón**: Permitir uso de AWS CloudShell para todos los colaboradores
+**Comando ejecutado**:
+```bash
+aws iam attach-group-policy --group-name GovTech-Infrastructure --policy-arn arn:aws:iam::aws:policy/AWSCloudShellFullAccess
+aws iam attach-group-policy --group-name GovTech-Deployment --policy-arn arn:aws:iam::aws:policy/AWSCloudShellFullAccess
+aws iam attach-group-policy --group-name GovTech-DevOps --policy-arn arn:aws:iam::aws:policy/AWSCloudShellFullAccess
+```
+
+#### 4. Nuevas Políticas Custom
+
+**GovTech-IAM-EKS-Roles** (Colaborador A)
+- **Fecha**: 2026-02-13
+- **Razón**: Permitir creación de IAM roles para EKS cluster (bloqueante Semana 2)
+- **Archivos**: `aws/iam/policies/govtech-iam-eks-roles.json`
+
+**GovTech-S3-Admin** (Colaborador A)
+- **Fecha**: 2026-02-13
+- **Razón**: Gestión completa de buckets S3 para aplicación (limitado solo a Terraform state antes)
+- **Archivos**: `aws/iam/policies/govtech-s3-admin.json`
+
+**GovTech-ALB-Controller** (Colaborador B)
+- **Fecha**: 2026-02-13
+- **Razón**: Permitir creación de Application Load Balancers para Ingress (bloqueante Semana 4)
+- **Archivos**: `aws/iam/policies/govtech-alb-controller.json`
+
+**GovTech-AutoScaling** (Colaborador B)
+- **Fecha**: 2026-02-13
+- **Razón**: Permitir configuración de HPA (Horizontal Pod Autoscaler) en Semana 3
+- **Archivos**: `aws/iam/policies/govtech-autoscaling.json`
+
+**Script de instalación**: `aws/iam/add-missing-permissions.sh`
+
+#### 5. Auditoría de Permisos Completa
+**Fecha**: 2026-02-13
+**Documento**: `aws/iam/PERMISSION_AUDIT.md`
+**Resultado**: Identificadas 4 brechas de permisos críticas, todas resueltas
+
+---
+
+## Notas de Seguridad v2.0
+
+**Mejoras**:
+- Colaboradores pueden usar AWS Console para visualizar recursos (solo lectura)
+- CloudShell habilitado para trabajo remoto sin configurar AWS CLI localmente
+- Permisos IAM suficientes para completar todas las tareas del proyecto
+- Sin bloqueantes identificados para Semanas 2-4
+
+**Consideraciones**:
+- ReadOnlyAccess es amplio, pero seguro (solo lectura)
+- Mantenemos principio de Least Privilege en acciones de escritura
+- CloudTrail sigue registrando todas las acciones
+- Sin Permission Boundaries, pero políticas siguen siendo restrictivas
+
+**Riesgos Mitigados**:
+- Usuarios no pueden crear/eliminar usuarios IAM
+- Usuarios no pueden modificar políticas
+- Usuarios no pueden acceder a billing
+- Recursos limitados por prefijos (govtech-*, eks-*)
+- Producción protegida por tags
+
+---
+
 **Documento creado por**: GovTech Security Team
-**Revisado por**: Root Administrator
-**Próxima revisión**: 2026-05-10 (cada 90 días)
+**Versión 1.0**: 2026-02-10
+**Versión 2.0**: 2026-02-13
+**Última revisión**: 2026-02-13
+**Próxima revisión**: 2026-05-13 (cada 90 días)
 
 ---
 

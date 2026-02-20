@@ -4,6 +4,8 @@ import HomePage from './pages/HomePage'
 import ArchitecturePage from './pages/ArchitecturePage'
 import MigrationPage from './pages/MigrationPage'
 import HealthPage from './pages/HealthPage'
+import DemoMigration from './pages/DemoMigration'
+import DocsPage from './pages/DocsPage'
 
 function App() {
   return (
@@ -15,6 +17,9 @@ function App() {
           <Route path="/architecture" element={<ArchitecturePage />} />
           <Route path="/migration" element={<MigrationPage />} />
           <Route path="/health" element={<HealthPage />} />
+          <Route path="/demo" element={<DemoMigration />} />
+          <Route path="/docs" element={<DocsPage />} />
+          <Route path="/docs/:docId" element={<DocsPage />} />
         </Routes>
       </main>
     </div>

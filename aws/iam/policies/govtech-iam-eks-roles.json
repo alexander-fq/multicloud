@@ -1,0 +1,126 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "EKSRoleManagement",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateRole",
+        "iam:DeleteRole",
+        "iam:GetRole",
+        "iam:ListRoles",
+        "iam:UpdateRole",
+        "iam:UpdateAssumeRolePolicy"
+      ],
+      "Resource": [
+        "arn:aws:iam::835960996869:role/eks-*",
+        "arn:aws:iam::835960996869:role/EKS*",
+        "arn:aws:iam::835960996869:role/govtech-*"
+      ]
+    },
+    {
+      "Sid": "EKSPolicyManagement",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreatePolicy",
+        "iam:DeletePolicy",
+        "iam:GetPolicy",
+        "iam:GetPolicyVersion",
+        "iam:ListPolicyVersions",
+        "iam:CreatePolicyVersion",
+        "iam:DeletePolicyVersion"
+      ],
+      "Resource": [
+        "arn:aws:iam::835960996869:policy/eks-*",
+        "arn:aws:iam::835960996869:policy/govtech-*"
+      ]
+    },
+    {
+      "Sid": "EKSRolePolicyAttachment",
+      "Effect": "Allow",
+      "Action": [
+        "iam:AttachRolePolicy",
+        "iam:DetachRolePolicy",
+        "iam:ListAttachedRolePolicies",
+        "iam:PutRolePolicy",
+        "iam:GetRolePolicy",
+        "iam:DeleteRolePolicy",
+        "iam:ListRolePolicies"
+      ],
+      "Resource": [
+        "arn:aws:iam::835960996869:role/eks-*",
+        "arn:aws:iam::835960996869:role/EKS*",
+        "arn:aws:iam::835960996869:role/govtech-*"
+      ]
+    },
+    {
+      "Sid": "EKSPassRole",
+      "Effect": "Allow",
+      "Action": [
+        "iam:PassRole"
+      ],
+      "Resource": [
+        "arn:aws:iam::835960996869:role/eks-*",
+        "arn:aws:iam::835960996869:role/EKS*",
+        "arn:aws:iam::835960996869:role/govtech-*"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "iam:PassedToService": [
+            "eks.amazonaws.com",
+            "ec2.amazonaws.com"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "EKSOIDCProvider",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateOpenIDConnectProvider",
+        "iam:DeleteOpenIDConnectProvider",
+        "iam:GetOpenIDConnectProvider",
+        "iam:ListOpenIDConnectProviders",
+        "iam:TagOpenIDConnectProvider",
+        "iam:UntagOpenIDConnectProvider"
+      ],
+      "Resource": "arn:aws:iam::835960996869:oidc-provider/*"
+    },
+    {
+      "Sid": "EKSTagging",
+      "Effect": "Allow",
+      "Action": [
+        "iam:TagRole",
+        "iam:UntagRole",
+        "iam:ListRoleTags",
+        "iam:TagPolicy",
+        "iam:UntagPolicy",
+        "iam:ListPolicyTags"
+      ],
+      "Resource": [
+        "arn:aws:iam::835960996869:role/eks-*",
+        "arn:aws:iam::835960996869:role/EKS*",
+        "arn:aws:iam::835960996869:role/govtech-*",
+        "arn:aws:iam::835960996869:policy/eks-*",
+        "arn:aws:iam::835960996869:policy/govtech-*"
+      ]
+    },
+    {
+      "Sid": "EKSInstanceProfile",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateInstanceProfile",
+        "iam:DeleteInstanceProfile",
+        "iam:GetInstanceProfile",
+        "iam:AddRoleToInstanceProfile",
+        "iam:RemoveRoleFromInstanceProfile",
+        "iam:ListInstanceProfiles",
+        "iam:ListInstanceProfilesForRole"
+      ],
+      "Resource": [
+        "arn:aws:iam::835960996869:instance-profile/eks-*",
+        "arn:aws:iam::835960996869:instance-profile/govtech-*"
+      ]
+    }
+  ]
+}

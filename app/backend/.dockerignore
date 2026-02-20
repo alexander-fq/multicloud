@@ -1,0 +1,34 @@
+# Dependencias (se instalan con npm ci)
+node_modules/
+npm-debug.log
+
+# Archivos de entorno (secrets no deben ir en la imagen)
+.env
+.env.local
+.env.*.local
+
+# Tests y coverage
+tests/
+test/
+*.test.js
+*.spec.js
+coverage/
+.nyc_output/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# Documentacion
+README.md
+*.md
+
+# Archivos temporales
+*.log
+*.tmp
+.DS_Store
+Thumbs.db

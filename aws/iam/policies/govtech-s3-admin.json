@@ -1,0 +1,85 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "S3BucketManagement",
+      "Effect": "Allow",
+      "Action": [
+        "s3:CreateBucket",
+        "s3:DeleteBucket",
+        "s3:ListBucket",
+        "s3:ListBucketVersions",
+        "s3:GetBucketLocation",
+        "s3:GetBucketVersioning",
+        "s3:GetBucketAcl",
+        "s3:GetBucketCORS",
+        "s3:GetBucketWebsite",
+        "s3:GetBucketLogging",
+        "s3:GetBucketPolicy",
+        "s3:GetBucketNotification",
+        "s3:GetBucketRequestPayment",
+        "s3:GetBucketTagging",
+        "s3:GetBucketPublicAccessBlock",
+        "s3:GetEncryptionConfiguration",
+        "s3:GetLifecycleConfiguration",
+        "s3:GetReplicationConfiguration",
+        "s3:GetAccelerateConfiguration"
+      ],
+      "Resource": "arn:aws:s3:::govtech-*"
+    },
+    {
+      "Sid": "S3BucketConfiguration",
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutBucketVersioning",
+        "s3:PutBucketAcl",
+        "s3:PutBucketCORS",
+        "s3:PutBucketWebsite",
+        "s3:PutBucketLogging",
+        "s3:PutBucketPolicy",
+        "s3:DeleteBucketPolicy",
+        "s3:PutBucketNotification",
+        "s3:PutBucketRequestPayment",
+        "s3:PutBucketTagging",
+        "s3:PutBucketPublicAccessBlock",
+        "s3:PutEncryptionConfiguration",
+        "s3:PutLifecycleConfiguration",
+        "s3:PutReplicationConfiguration",
+        "s3:PutAccelerateConfiguration"
+      ],
+      "Resource": "arn:aws:s3:::govtech-*"
+    },
+    {
+      "Sid": "S3ObjectManagement",
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject",
+        "s3:GetObject",
+        "s3:DeleteObject",
+        "s3:GetObjectVersion",
+        "s3:DeleteObjectVersion",
+        "s3:GetObjectAcl",
+        "s3:PutObjectAcl",
+        "s3:GetObjectVersionAcl",
+        "s3:PutObjectVersionAcl",
+        "s3:RestoreObject",
+        "s3:GetObjectTagging",
+        "s3:PutObjectTagging",
+        "s3:DeleteObjectTagging",
+        "s3:GetObjectVersionTagging",
+        "s3:PutObjectVersionTagging",
+        "s3:DeleteObjectVersionTagging"
+      ],
+      "Resource": "arn:aws:s3:::govtech-*/*"
+    },
+    {
+      "Sid": "S3ListAllBuckets",
+      "Effect": "Allow",
+      "Action": [
+        "s3:ListAllMyBuckets",
+        "s3:GetBucketLocation"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

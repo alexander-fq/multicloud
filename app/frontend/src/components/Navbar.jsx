@@ -9,7 +9,9 @@ function Navbar() {
     { path: '/', label: 'Home' },
     { path: '/architecture', label: 'Architecture' },
     { path: '/migration', label: 'Migration' },
+    { path: '/demo', label: 'Demo' },
     { path: '/health', label: 'Health' },
+    { path: '/docs', label: 'Docs' },
   ]
 
   return (
