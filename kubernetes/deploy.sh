@@ -87,9 +87,11 @@ log_info "Contexto activo: $CURRENT_CONTEXT"
 # ========================
 # PASO 2: Namespace y configuracion base
 # ========================
-log_info "--- Paso 2: Aplicar namespace y configuracion base ---"
+log_info "--- Paso 2: Aplicar namespace, RBAC y configuracion base ---"
 kubectl apply -f "$SCRIPT_DIR/namespace.yaml"
+kubectl apply -f "$SCRIPT_DIR/rbac.yaml"        # ServiceAccounts y Roles (antes de los pods)
 kubectl apply -f "$SCRIPT_DIR/configmap.yaml"
+kubectl apply -f "$SCRIPT_DIR/pdb.yaml"         # PodDisruptionBudgets (garantias de disponibilidad)
 
 # Verificar que el Secret existe (no lo creamos aqui - debe existir antes)
 if ! kubectl get secret govtech-secrets -n "$NAMESPACE" &> /dev/null; then
@@ -148,9 +150,16 @@ kubectl rollout status deployment/frontend -n "$NAMESPACE" --timeout=300s
 log_info "Frontend listo"
 
 # ========================
-# PASO 7: Ingress
+# PASO 7: Network Policies (Zero-Trust networking)
 # ========================
-log_info "--- Paso 7: Aplicar Ingress (AWS ALB) ---"
+log_info "--- Paso 7: Aplicar Network Policies ---"
+kubectl apply -f "$SCRIPT_DIR/network-policies.yaml"
+log_info "Network Policies aplicadas: trafico entre pods controlado"
+
+# ========================
+# PASO 8: Ingress
+# ========================
+log_info "--- Paso 8: Aplicar Ingress (AWS ALB) ---"
 kubectl apply -f "$SCRIPT_DIR/ingress/ingress-aws.yaml"
 
 log_info "Esperando que el ALB sea creado (puede tardar 2-3 minutos)..."
@@ -190,3 +199,8 @@ echo "  kubectl get pods -n $NAMESPACE"
 echo "  kubectl logs -f deploy/backend -n $NAMESPACE"
 echo "  kubectl logs -f deploy/frontend -n $NAMESPACE"
 echo "  kubectl describe ingress govtech-ingress -n $NAMESPACE"
+echo ""
+log_info "Verificar seguridad:"
+echo "  kubectl get networkpolicies -n $NAMESPACE"
+echo "  kubectl get pdb -n $NAMESPACE"
+echo "  kubectl get serviceaccounts -n $NAMESPACE"

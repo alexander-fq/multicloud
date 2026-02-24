@@ -105,6 +105,22 @@ module "storage" {
 }
 
 # ----------------------------------------
+# SECURITY: WAF, GuardDuty, KMS, CloudTrail, Security Hub
+# En dev: misma configuracion que prod para detectar problemas temprano
+# ----------------------------------------
+module "security" {
+  source = "../../modules/security"
+
+  project_name = "govtech"
+  environment  = "dev"
+  account_id   = "835960996869"
+  aws_region   = "us-east-1"
+  logs_bucket  = module.storage.bucket_id
+
+  depends_on = [module.storage]
+}
+
+# ----------------------------------------
 # OUTPUTS utiles para kubectl y CI/CD
 # ----------------------------------------
 output "vpc_id" {

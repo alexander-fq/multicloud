@@ -119,6 +119,33 @@ module "storage" {
 }
 
 # ----------------------------------------
+# SECURITY: WAF, GuardDuty, KMS, CloudTrail, Security Hub
+# Prod: configuracion identica a staging/dev pero con retention de logs mas largo
+# CloudTrail retiene 1 año en prod (compliance gubernamental)
+# ----------------------------------------
+module "security" {
+  source = "../../modules/security"
+
+  project_name = "govtech"
+  environment  = "prod"
+  account_id   = "835960996869"
+  aws_region   = "us-east-1"
+  logs_bucket  = module.storage.bucket_id
+
+  depends_on = [module.storage]
+}
+
+output "waf_arn" {
+  description = "ARN del WAF - asociar al ALB con: aws wafv2 associate-web-acl"
+  value       = module.security.waf_web_acl_arn
+}
+
+output "kms_key_id" {
+  description = "ID de la clave KMS para encriptacion de datos"
+  value       = module.security.kms_key_id
+}
+
+# ----------------------------------------
 # OUTPUTS
 # ----------------------------------------
 output "vpc_id" {
