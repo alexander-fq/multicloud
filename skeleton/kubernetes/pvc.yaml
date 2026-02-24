@@ -1,0 +1,45 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: govtech
+  labels:
+    app: govtech
+    component: database
+spec:
+  # Modo de acceso al volumen
+  accessModes:
+    - ReadWriteOnce  # RWO = Un solo pod puede leer/escribir
+                     # ReadWriteMany (RWX) = Multiples pods
+                     # ReadOnlyMany (ROX) = Multiples pods solo lectura
+
+  # Recursos solicitados
+  resources:
+    requests:
+      storage: 10Gi  # 10 Gigabytes de almacenamiento
+
+  # Storage Class (tipo de almacenamiento)
+  # En AWS EKS, gp2 = General Purpose SSD (EBS)
+  storageClassName: gp2
+
+  # OPCIONAL: Volume Name (si quieres usar un volumen existente)
+  # volumeName: my-existing-pv
+
+---
+
+# PVC adicional para uploads de usuarios (opcional)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: uploads-pvc
+  namespace: govtech
+  labels:
+    app: govtech
+    component: storage
+spec:
+  accessModes:
+    - ReadWriteMany  # Multiple pods pueden acceder (para escalar)
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: efs  # AWS EFS (Elastic File System) para RWX

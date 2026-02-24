@@ -1,0 +1,186 @@
+# ============================================================
+# KUBERNETES RBAC - Role Based Access Control
+# ============================================================
+#
+# Que es RBAC en Kubernetes?
+# Es el sistema de permisos de Kubernetes.
+# Define QUE puede hacer QUIEN sobre QUE recursos.
+#
+# Componentes:
+# - ServiceAccount: La "identidad" de un pod (como un usuario para la app)
+# - Role: Lista de permisos (que acciones sobre que recursos)
+# - RoleBinding: Conecta ServiceAccount con Role
+#
+# Por defecto, los pods usan el ServiceAccount "default" que tiene
+# acceso a la API de Kubernetes. Esto es un riesgo de seguridad:
+# si un pod es comprometido, el atacante puede manipular el cluster.
+#
+# PRINCIPIO DE MINIMO PRIVILEGIO:
+# Cada pod tiene SOLO los permisos que necesita para funcionar.
+# ============================================================
+
+---
+# ============================================================
+# SERVICE ACCOUNTS - Una identidad por componente
+# ============================================================
+
+# Identidad del backend (Node.js)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: govtech-backend
+  namespace: govtech
+  labels:
+    app: govtech
+    component: backend
+  annotations:
+    # IRSA: IAM Role for Service Account
+    # Esta annotation conecta este ServiceAccount con un IAM Role de AWS.
+    # El pod puede asumir ese IAM Role para acceder a servicios AWS
+    # (Secrets Manager, S3) SIN necesitar access keys en el codigo.
+    eks.amazonaws.com/role-arn: arn:aws:iam::835960996869:role/govtech-backend-role
+automountServiceAccountToken: true  # El backend necesita acceder a Secrets Manager via IRSA
+
+---
+# Identidad del frontend (Nginx/React) - no necesita acceso a AWS
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: govtech-frontend
+  namespace: govtech
+  labels:
+    app: govtech
+    component: frontend
+automountServiceAccountToken: false  # Frontend no necesita token de Kubernetes
+
+---
+# Identidad de la base de datos
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: govtech-database
+  namespace: govtech
+  labels:
+    app: govtech
+    component: database
+automountServiceAccountToken: false  # La DB no necesita acceso a la API de K8s
+
+---
+# ============================================================
+# ROLES - Que permisos tiene cada componente
+# ============================================================
+
+# Role para el backend: puede leer ConfigMaps y Secrets del namespace
+# Necesita leer su configuracion (DB host, variables de entorno)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: govtech-backend-role
+  namespace: govtech
+  labels:
+    app: govtech
+    component: backend
+rules:
+  # Puede leer ConfigMaps (configuracion no sensible)
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]
+    resourceNames: ["govtech-config"]  # Solo el ConfigMap de govtech, no todos
+
+  # Puede leer Secrets (para credenciales de DB)
+  # En produccion real, usar AWS Secrets Manager via IRSA en lugar de K8s secrets
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get"]
+    resourceNames: ["govtech-secrets"]  # Solo el Secret especifico
+
+---
+# Role para CI/CD: el pipeline necesita actualizar los deployments
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: govtech-deployer-role
+  namespace: govtech
+  labels:
+    app: govtech
+    security: rbac
+rules:
+  # Puede actualizar deployments (para hacer rollouts de nuevas imagenes)
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "update", "patch"]
+
+  # Puede ver el estado de los pods (para verificar rollouts)
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list", "watch"]
+
+  # NO puede: delete pods, crear recursos nuevos, ver secrets
+  # Esta es la diferencia entre un sistema inseguro y uno seguro
+
+---
+# ============================================================
+# ROLE BINDINGS - Conectar ServiceAccounts con Roles
+# ============================================================
+
+# El backend usa el role que le permite leer config y secrets
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: govtech-backend-binding
+  namespace: govtech
+  labels:
+    app: govtech
+    component: backend
+subjects:
+  - kind: ServiceAccount
+    name: govtech-backend
+    namespace: govtech
+roleRef:
+  kind: Role
+  name: govtech-backend-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# El pipeline de CI/CD (GitHub Actions) puede hacer deploys
+# Usa un ServiceAccount especial para el deployer
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: govtech-deployer
+  namespace: govtech
+  labels:
+    app: govtech
+    security: rbac
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: govtech-deployer-binding
+  namespace: govtech
+  labels:
+    app: govtech
+    security: rbac
+subjects:
+  - kind: ServiceAccount
+    name: govtech-deployer
+    namespace: govtech
+roleRef:
+  kind: Role
+  name: govtech-deployer-role
+  apiGroup: rbac.authorization.k8s.io
+
+# ============================================================
+# VERIFICACION:
+# kubectl get serviceaccounts -n govtech
+# kubectl get roles -n govtech
+# kubectl get rolebindings -n govtech
+#
+# Ver que puede hacer un ServiceAccount:
+# kubectl auth can-i get secrets --as=system:serviceaccount:govtech:govtech-frontend -n govtech
+# (debe decir "no" porque el frontend no tiene permisos de secrets)
+#
+# kubectl auth can-i get configmaps --as=system:serviceaccount:govtech:govtech-backend -n govtech
+# (debe decir "yes" porque el backend si tiene ese permiso)
+# ============================================================

@@ -1,0 +1,97 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AutoScalingGroupManagement",
+      "Effect": "Allow",
+      "Action": [
+        "autoscaling:DescribeAutoScalingGroups",
+        "autoscaling:DescribeAutoScalingInstances",
+        "autoscaling:DescribeLaunchConfigurations",
+        "autoscaling:DescribeScalingActivities",
+        "autoscaling:DescribeScheduledActions",
+        "autoscaling:DescribeAccountLimits",
+        "autoscaling:DescribeAdjustmentTypes",
+        "autoscaling:DescribeTerminationPolicyTypes",
+        "autoscaling:DescribeLifecycleHooks",
+        "autoscaling:DescribeLifecycleHookTypes",
+        "autoscaling:DescribeNotificationConfigurations",
+        "autoscaling:DescribeMetricCollectionTypes",
+        "autoscaling:DescribeLoadBalancers",
+        "autoscaling:DescribeLoadBalancerTargetGroups",
+        "autoscaling:DescribeTags"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "AutoScalingPolicyManagement",
+      "Effect": "Allow",
+      "Action": [
+        "autoscaling:DescribePolicies",
+        "autoscaling:PutScalingPolicy",
+        "autoscaling:DeleteScalingPolicy"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "AutoScalingGroupModification",
+      "Effect": "Allow",
+      "Action": [
+        "autoscaling:SetDesiredCapacity",
+        "autoscaling:UpdateAutoScalingGroup",
+        "autoscaling:TerminateInstanceInAutoScalingGroup",
+        "autoscaling:AttachLoadBalancers",
+        "autoscaling:DetachLoadBalancers",
+        "autoscaling:AttachLoadBalancerTargetGroups",
+        "autoscaling:DetachLoadBalancerTargetGroups"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringLike": {
+          "autoscaling:ResourceTag/kubernetes.io/cluster/*": "owned"
+        }
+      }
+    },
+    {
+      "Sid": "CloudWatchAlarmsForHPA",
+      "Effect": "Allow",
+      "Action": [
+        "cloudwatch:PutMetricAlarm",
+        "cloudwatch:DescribeAlarms",
+        "cloudwatch:DeleteAlarms",
+        "cloudwatch:GetMetricStatistics",
+        "cloudwatch:ListMetrics",
+        "cloudwatch:DescribeAlarmsForMetric"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "EC2InstancesForAutoscaling",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:DescribeInstances",
+        "ec2:DescribeInstanceTypes",
+        "ec2:DescribeInstanceStatus",
+        "ec2:DescribeLaunchTemplateVersions",
+        "ec2:DescribeImages",
+        "ec2:DescribeVolumes",
+        "ec2:DescribeVpcs",
+        "ec2:DescribeSubnets",
+        "ec2:DescribeSecurityGroups",
+        "ec2:DescribeKeyPairs"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "EKSClusterMetrics",
+      "Effect": "Allow",
+      "Action": [
+        "eks:DescribeCluster",
+        "eks:ListClusters",
+        "eks:DescribeNodegroup",
+        "eks:ListNodegroups"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
