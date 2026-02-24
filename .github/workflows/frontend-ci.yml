@@ -10,6 +10,10 @@ on:
     paths:
       - 'app/frontend/**'
 
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   test:
     name: Lint, Audit & Build
@@ -34,9 +38,10 @@ jobs:
         working-directory: ./app/frontend
         run: npm run lint || echo "No lint script configured"
 
-      - name: Security audit
+      - name: Security audit (bloqueante en HIGH/CRITICAL)
         working-directory: ./app/frontend
-        run: npm audit --audit-level=high || true
+        # CORREGIDO: Eliminado "|| true"
+        run: npm audit --audit-level=high
 
       - name: Build production bundle
         working-directory: ./app/frontend
@@ -50,7 +55,7 @@ jobs:
           retention-days: 7
 
   build-and-push:
-    name: Build & Push to ECR
+    name: Build, Scan & Push to ECR
     needs: test
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging')
@@ -59,18 +64,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
+      - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: us-east-1
 
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build, tag and push image
+      # BUILD -> SCAN -> PUSH (orden correcto)
+      - name: Build Docker image
         working-directory: ./app/frontend
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
@@ -79,13 +84,36 @@ jobs:
         run: |
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
           docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+      - name: Scan image for vulnerabilities ANTES de push (Trivy)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ steps.login-ecr.outputs.registry }}/govtech-frontend:${{ github.sha }}
+          format: 'table'
+          exit-code: '1'
+          severity: 'CRITICAL,HIGH'
+          ignore-unfixed: true
+
+      - name: Push image to ECR (solo si el scan paso)
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: govtech-frontend
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
-      - name: Scan image for vulnerabilities (Trivy)
+      - name: Generate SBOM
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ steps.login-ecr.outputs.registry }}/govtech-frontend:latest
-          format: 'table'
+          image-ref: ${{ steps.login-ecr.outputs.registry }}/govtech-frontend:${{ github.sha }}
+          format: 'cyclonedx'
+          output: 'frontend-sbom.json'
           exit-code: '0'
-          severity: 'CRITICAL,HIGH'
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-sbom-${{ github.sha }}
+          path: frontend-sbom.json
+          retention-days: 90

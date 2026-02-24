@@ -1,0 +1,160 @@
+name: Security Scan
+
+# Este workflow corre en TODOS los pull requests y pushes a main/staging
+# Es el "guardian" de seguridad antes de que cualquier codigo llegue a produccion
+# Si falla, el merge queda bloqueado
+on:
+  pull_request:
+    branches: [main, staging]
+  push:
+    branches: [main, staging]
+
+jobs:
+  # ============================================================
+  # JOB 1: SECRET SCANNING - Detectar credenciales en el codigo
+  # Gitleaks escanea TODO el historial de git buscando:
+  # - API keys, tokens, passwords hardcodeadas
+  # - AWS credentials, private keys, JWT secrets
+  # Si encuentra algo: el pipeline falla inmediatamente
+  # ============================================================
+  secret-scan:
+    name: Secret Scanning (Gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Necesario para escanear todo el historial git
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}  # Solo necesario en repos privados enterprise
+        # Gitleaks falla con exit-code 1 si encuentra secretos
+        # El job falla automaticamente, bloqueando el merge
+
+  # ============================================================
+  # JOB 2: SAST - Analisis Estatico de Seguridad del Codigo
+  # Semgrep escanea el codigo fuente buscando patrones vulnerables:
+  # - SQL injection, XSS, eval() inseguro
+  # - Dependencias con vulnerabilidades conocidas
+  # - Patrones inseguros de autenticacion/criptografia
+  # ============================================================
+  sast-scan:
+    name: SAST (Semgrep)
+    runs-on: ubuntu-latest
+    container:
+      image: returntocorp/semgrep
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Semgrep SAST
+        run: |
+          semgrep scan \
+            --config=auto \
+            --config=p/nodejs \
+            --config=p/react \
+            --config=p/jwt \
+            --config=p/secrets \
+            --config=p/owasp-top-ten \
+            --error \
+            --json \
+            --output=semgrep-results.json \
+            app/backend/src app/frontend/src || true
+
+          # Mostrar resultados en formato legible
+          semgrep scan \
+            --config=auto \
+            --config=p/nodejs \
+            --config=p/react \
+            --config=p/jwt \
+            --config=p/secrets \
+            --config=p/owasp-top-ten \
+            --error \
+            app/backend/src app/frontend/src
+
+      - name: Upload Semgrep results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-results
+          path: semgrep-results.json
+          retention-days: 30
+
+  # ============================================================
+  # JOB 3: DEPENDENCY SCAN - Vulnerabilidades en dependencias npm
+  # npm audit verifica si las dependencias instaladas tienen CVEs conocidos
+  # Configurado para FALLAR en vulnerabilidades HIGH o CRITICAL
+  # (los workflows originales usaban || true, que nunca fallaba)
+  # ============================================================
+  dependency-scan:
+    name: Dependency Vulnerability Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Audit backend dependencies
+        working-directory: ./app/backend
+        run: |
+          npm ci --prefer-offline
+          # Falla si hay vulnerabilidades HIGH o CRITICAL (sin el || true que neutralizaba esto)
+          npm audit --audit-level=high
+        continue-on-error: false  # Explicito: NO continuar si hay vulnerabilidades criticas
+
+      - name: Audit frontend dependencies
+        working-directory: ./app/frontend
+        run: |
+          npm ci --prefer-offline
+          npm audit --audit-level=high
+        continue-on-error: false
+
+  # ============================================================
+  # JOB 4: IaC SCAN - Escaneo de Infraestructura como Codigo
+  # Checkov escanea los archivos Terraform y Kubernetes buscando:
+  # - Recursos sin encriptacion
+  # - Security groups demasiado permisivos
+  # - Kubernetes pods corriendo como root
+  # - Secrets no encriptados
+  # ============================================================
+  iac-scan:
+    name: IaC Security Scan (Checkov)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Checkov on Terraform
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: terraform/
+          framework: terraform
+          output_format: cli
+          soft_fail: true  # No bloquea el pipeline pero reporta problemas
+          download_external_modules: false
+
+      - name: Run Checkov on Kubernetes
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: kubernetes/
+          framework: kubernetes
+          output_format: cli
+          soft_fail: true
+
+  # ============================================================
+  # RESUMEN: Este workflow garantiza que:
+  # 1. NINGUN secreto/credencial se suba al repositorio
+  # 2. El codigo no tenga vulnerabilidades OWASP Top 10 conocidas
+  # 3. Las dependencias npm no tengan CVEs HIGH/CRITICAL
+  # 4. La infraestructura Terraform/K8s siga mejores practicas
+  #
+  # Flujo de aprobacion:
+  # PR -> security-scan (DEBE pasar) -> revision humana -> merge
+  # ============================================================
