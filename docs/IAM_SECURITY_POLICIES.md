@@ -1,222 +1,308 @@
-# IAM Security Policies - Mínimo Privilegio
+# IAM Security Policies - GovTech Cloud Migration Platform
 
 **Proyecto**: GovTech Cloud Migration Platform
-**Versión**: 2.0
-**Fecha**: 2026-02-13
-**Última actualización**: 2026-02-13
-**Principio**: Least Privilege (Mínimo Privilegio)
-
-**Cambios en v2.0**:
-- Eliminación de Permission Boundaries (bloqueaban acceso a consola web)
-- Adición de ReadOnlyAccess para acceso a AWS Console
-- Adición de AWSCloudShellFullAccess para todos los colaboradores
-- 4 nuevas políticas custom para completar permisos faltantes
-- Actualización de matriz de permisos y procedimientos
+**Version**: 3.0
+**Fecha**: 2026-02-23
+**Principio**: Minimo Privilegio con Jerarquia Funcional de 3 Niveles
 
 ---
 
 ## Tabla de Contenidos
 
-1. [Introducción](#introducción)
-2. [Roles del Proyecto](#roles-del-proyecto)
+1. [Principio de Minimo Privilegio](#principio-de-minimo-privilegio)
+2. [Jerarquia Funcional](#jerarquia-funcional)
 3. [Estructura de Grupos IAM](#estructura-de-grupos-iam)
-4. [Políticas por Colaborador](#políticas-por-colaborador)
-5. [Matriz de Permisos](#matriz-de-permisos)
-6. [Políticas JSON Detalladas](#políticas-json-detalladas)
-7. [Boundary Policies](#boundary-policies)
-8. [Auditoría y Compliance](#auditoría-y-compliance)
-9. [Procedimientos de Implementación](#procedimientos-de-implementación)
+4. [Politicas por Grupo](#politicas-por-grupo)
+5. [Politicas JSON Detalladas](#politicas-json-detalladas)
+6. [Auditoria y Compliance](#auditoria-y-compliance)
+7. [Procedimientos de Implementacion](#procedimientos-de-implementacion)
 
 ---
 
-## Introducción
+## Principio de Minimo Privilegio
 
-### Principio de Mínimo Privilegio
+**Definicion**: Cada usuario recibe SOLO los permisos necesarios para su funcion actual, nada mas.
 
-**Definición**: Cada usuario debe tener SOLO los permisos necesarios para realizar su trabajo, nada más.
+**Por que es critico en Cloud**:
+En una infraestructura on-premise, el acceso fisico es la barrera de seguridad principal. En AWS, cualquier credencial comprometida (access key, session token) puede ejecutar operaciones destructivas desde cualquier lugar del mundo en segundos. El minimo privilegio limita el radio de dano a un solo dominio funcional.
 
-**Objetivos**:
-- Reducir superficie de ataque
-- Limitar daño en caso de credenciales comprometidas
-- Cumplir con mejores prácticas de seguridad
-- Facilitar auditoría y compliance
-
-**Estrategia**:
+**Estrategia aplicada**:
 ```
-1. Identificar tareas de cada colaborador
-2. Mapear tareas a permisos AWS específicos
-3. Crear políticas custom restrictivas
-4. Agrupar usuarios por función
-5. Implementar boundaries (límites no superables)
-6. Auditar accesos regularmente
+1. Identificar dominios funcionales (red, contenedores, base de datos, etc.)
+2. Crear un grupo IAM por dominio
+3. Asignar solo los permisos necesarios para ese dominio
+4. Organizar grupos por nivel de riesgo (3 niveles)
+5. Un usuario pertenece a los grupos que corresponden a su funcion
+6. Auditar accesos regularmente via CloudTrail
 ```
 
 ---
 
-## Roles del Proyecto
+## Jerarquia Funcional
 
-### 1. Root Account (Administrador Principal)
+AWS IAM no tiene jerarquia nativa entre grupos. La jerarquia descrita aqui es **funcional y de riesgo**: define quien tiene acceso a que, con que nivel de supervision, y que proceso de aprobacion requiere.
 
-**Función**: Administrador máximo del proyecto AWS
+```
+                   [ govtech-admin ]
+                   Operador principal
+                   Pertenece a todos los grupos
+                           |
+       +-------------------+-------------------+
+       |                   |                   |
+  NIVEL 1             NIVEL 2             NIVEL 3
+  Critico            Operacional          Solo lectura
+       |                   |                   |
+  Network-Admin       Container-Deploy    Secrets-ReadOnly
+  EKS-Admin           ALB-Operator        Monitor-ReadOnly
+  Database-Admin      CICD-Operator       Security-Auditor
+  Terraform-Operator
+```
 
-**Responsabilidades**:
-- Gestión de usuarios IAM (crear, modificar, eliminar)
-- Gestión de grupos y políticas
-- Configuración de billing y costos
-- Gestión de recursos críticos de producción
-- Auditoría de seguridad
-- Respuesta a incidentes
-- Backup y disaster recovery
+### Nivel 1 - Critico
 
-**Permisos**: AdministratorAccess (acceso total)
+**Grupos**: GovTech-Network-Admin, GovTech-EKS-Admin, GovTech-Database-Admin, GovTech-Terraform-Operator
 
-**Restricciones**:
-- NO usar para trabajo diario
-- Solo usar para tareas administrativas
+**Por que es critico**:
+Un actor malicioso con acceso a cualquiera de estos grupos puede destruir infraestructura completa:
+- Eliminar la VPC y dejar toda la plataforma sin red
+- Borrar el cluster EKS y todos sus workloads
+- Eliminar o corromper la base de datos de produccion
+- Ejecutar `terraform destroy` y borrar todo en minutos
+
+**Reglas de acceso**:
+- MFA obligatorio (preferiblemente hardware: YubiKey)
+- Acceso temporal recomendado (maximo 8 horas por sesion)
+- Requiere aprobacion de un segundo responsable en equipos
+- Toda accion registrada en CloudTrail con alerta inmediata
+- Revision semanal de quien tiene acceso activo
+
+### Nivel 2 - Operacional
+
+**Grupos**: GovTech-Container-Deploy, GovTech-ALB-Operator, GovTech-CICD-Operator
+
+**Por que es operacional**:
+Un actor malicioso puede comprometer la aplicacion pero no destruir infraestructura directamente:
+- Desplegar una imagen Docker maliciosa en produccion
+- Modificar reglas del ALB para redirigir trafico
+- Alterar pipelines de CI/CD para ejecutar codigo arbitrario
+
+**Reglas de acceso**:
 - MFA obligatorio
-- CloudTrail habilitado para auditoría
+- Acceso permanente para operaciones diarias
+- Revision mensual de accesos activos
 
----
+### Nivel 3 - Solo Lectura
 
-### 2. Colaborador A: Infrastructure Team
+**Grupos**: GovTech-Secrets-ReadOnly, GovTech-Monitor-ReadOnly, GovTech-Security-Auditor
 
-**Función**: Docker + Terraform (Infraestructura como Código)
+**Por que es el menos riesgoso**:
+Un actor malicioso solo puede exfiltrar informacion, no modificar ni eliminar:
+- Leer credenciales en Secrets Manager
+- Ver metricas, logs y alertas de CloudWatch
+- Leer reportes de CloudTrail y GuardDuty
 
-**Tareas** (según INFRASTRUCTURE_TASKS.md):
-- Semana 1: Dockerizar backend y frontend, crear docker-compose, configurar ECR
-- Semana 2-3: Crear módulos Terraform (networking, EKS, database, storage)
-- Semana 4: Configurar ambientes (dev, staging, prod) con Terraform
-
-**Necesita acceso a**:
-- Amazon ECR (crear repositorios, subir imágenes)
-- Amazon VPC (crear VPCs, subnets, gateways, security groups)
-- Amazon EKS (crear clusters, node groups)
-- Amazon RDS (crear instancias PostgreSQL)
-- Amazon S3 (crear buckets, gestionar Terraform state)
-- IAM (crear roles para EKS, EC2, pero NO gestionar usuarios)
-- CloudWatch (logs de Terraform)
-
-**NO necesita**:
-- Acceso a secretos de producción
-- Modificar usuarios IAM
-- Eliminar recursos de producción sin aprobación
-- Acceso a billing
-
----
-
-### 3. Colaborador B: Deployment Team
-
-**Función**: Kubernetes + Deployment (Orquestación)
-
-**Tareas** (según INFRASTRUCTURE_TASKS.md):
-- Semana 1: Crear manifiestos base (namespace, configmap, secrets, PVC)
-- Semana 2: Crear deployments de backend/frontend, services
-- Semana 3: Configurar database en K8s, auto-scaling (HPA)
-- Semana 4: Configurar ingress, testing en EKS
-
-**Necesita acceso a**:
-- Amazon EKS (acceso kubectl, aplicar manifests)
-- Amazon ECR (descargar imágenes, read-only)
-- Amazon EBS/EFS (crear volumes para PVCs)
-- AWS Secrets Manager (leer secrets, NO modificar prod)
-- CloudWatch (ver logs de pods)
-
-**NO necesita**:
-- Crear infraestructura base (VPC, subnets)
-- Modificar configuración de EKS cluster
-- Eliminar recursos de producción
-- Acceso a Terraform state
-
----
-
-### 4. Colaborador C: DevOps Team
-
-**Función**: CI/CD + Monitoring (Automatización y Observabilidad)
-
-**Tareas** (según INFRASTRUCTURE_TASKS.md):
-- Semana 1: Crear pipelines CI (GitHub Actions, build, test, push)
-- Semana 2: Crear pipelines CD (deployment automation, blue-green)
-- Semana 3: Configurar monitoring (CloudWatch, Prometheus, Grafana)
-- Semana 4: Documentación, tests end-to-end
-
-**Necesita acceso a**:
-- Amazon ECR (push/pull images desde CI/CD)
-- Amazon EKS (deploy desde CI/CD)
-- CloudWatch (crear dashboards, alarmas, log groups)
-- AWS Secrets Manager (gestionar secrets para CI/CD)
-- IAM (crear roles para GitHub Actions, NO usuarios)
-- S3 (artifacts de build)
-
-**NO necesita**:
-- Crear infraestructura base
-- Acceso SSH a nodes
-- Modificar VPC/networking
-- Eliminar recursos de producción manualmente
+**Reglas de acceso**:
+- MFA recomendado
+- Acceso permanente para roles de monitoreo
+- Revision trimestral de accesos activos
 
 ---
 
 ## Estructura de Grupos IAM
 
 ```
-AWS Account: 835960996869
-│
-├── Group: GovTech-Infrastructure
-│   ├── Members: [collab-infrastructure]
-│   └── Policies:
-│       ├── AWS Managed: AmazonEC2FullAccess
-│       ├── AWS Managed: AmazonVPCFullAccess
-│       ├── AWS Managed: AmazonEKSClusterPolicy
-│       ├── AWS Managed: ReadOnlyAccess (NUEVO v2.0 - Acceso consola web)
-│       ├── AWS Managed: AWSCloudShellFullAccess (NUEVO v2.0)
-│       ├── Custom: GovTech-ECR-Admin
-│       ├── Custom: GovTech-Terraform-State
-│       ├── Custom: GovTech-RDS-Admin
-│       ├── Custom: GovTech-IAM-EKS-Roles (NUEVO v2.0 - Crear roles IAM para EKS)
-│       └── Custom: GovTech-S3-Admin (NUEVO v2.0 - Gestión completa S3)
-│
-├── Group: GovTech-Deployment
-│   ├── Members: [collab-deployment]
-│   └── Policies:
-│       ├── AWS Managed: AmazonEKSWorkerNodePolicy
-│       ├── AWS Managed: AmazonEKS_CNI_Policy
-│       ├── AWS Managed: ReadOnlyAccess (NUEVO v2.0 - Acceso consola web)
-│       ├── AWS Managed: AWSCloudShellFullAccess (NUEVO v2.0)
-│       ├── Custom: GovTech-EKS-Deploy
-│       ├── Custom: GovTech-ECR-ReadOnly
-│       ├── Custom: GovTech-Secrets-Read
-│       ├── Custom: GovTech-ALB-Controller (NUEVO v2.0 - AWS Load Balancer)
-│       └── Custom: GovTech-AutoScaling (NUEVO v2.0 - HPA y Auto Scaling)
-│
-├── Group: GovTech-DevOps
-│   ├── Members: [collab-devops]
-│   └── Policies:
-│       ├── AWS Managed: CloudWatchFullAccess
-│       ├── AWS Managed: ReadOnlyAccess (NUEVO v2.0 - Acceso consola web)
-│       ├── AWS Managed: AWSCloudShellFullAccess (NUEVO v2.0)
-│       ├── Custom: GovTech-CICD-Access
-│       └── Custom: GovTech-Monitoring
-│
-└── User: root-admin
-    └── Policy: AdministratorAccess
+Cuenta AWS: 835960996869
+Region: us-east-1
+
+--- NIVEL 1 CRITICO ---
+
+Grupo: GovTech-Network-Admin
+Politicas AWS Managed:
+  - AmazonEC2FullAccess
+  - AmazonVPCFullAccess
+Politicas Custom:
+  (ninguna - los managed policies cubren el dominio)
+
+Grupo: GovTech-EKS-Admin
+Politicas AWS Managed:
+  - AmazonEKSClusterPolicy
+Politicas Custom:
+  - GovTech-IAM-EKS-Roles
+
+Grupo: GovTech-Database-Admin
+Politicas Custom:
+  - GovTech-RDS-Admin
+
+Grupo: GovTech-Terraform-Operator
+Politicas Custom:
+  - GovTech-Terraform-State
+  - GovTech-S3-Admin
+
+--- NIVEL 2 OPERACIONAL ---
+
+Grupo: GovTech-Container-Deploy
+Politicas Custom:
+  - GovTech-ECR-Admin
+  - GovTech-EKS-Deploy
+
+Grupo: GovTech-ALB-Operator
+Politicas Custom:
+  - GovTech-ALB-Controller
+  - GovTech-AutoScaling
+
+Grupo: GovTech-CICD-Operator
+Politicas Custom:
+  - GovTech-CICD-Access
+  - GovTech-ECR-ReadOnly
+
+--- NIVEL 3 SOLO LECTURA ---
+
+Grupo: GovTech-Secrets-ReadOnly
+Politicas Custom:
+  - GovTech-Secrets-Read
+
+Grupo: GovTech-Monitor-ReadOnly
+Politicas AWS Managed:
+  - CloudWatchReadOnlyAccess
+Politicas Custom:
+  - GovTech-Monitoring
+
+Grupo: GovTech-Security-Auditor
+Politicas AWS Managed:
+  - SecurityAudit
+Politicas Custom:
+  - GovTech-Security-Auditor
+
+--- USUARIOS ---
+
+Usuario: govtech-admin
+  Grupos: todos los grupos funcionales (operador principal)
+
+Nota sobre escalabilidad:
+  La estructura de grupos esta disenada para escalar sin modificaciones.
+  Incorporar un nuevo usuario es tan simple como crearlo y asignarlo
+  a los grupos que correspondan a su funcion. No se requiere crear
+  nuevas politicas ni modificar las existentes.
 ```
 
 ---
 
-## Políticas por Colaborador
+## Politicas por Grupo
 
-### Colaborador A: Infrastructure Team
+### GovTech-Network-Admin
 
-#### AWS Managed Policies
+| Permiso | Servicio | Accion permitida |
+|---------|----------|-----------------|
+| AmazonEC2FullAccess | EC2 | Crear, modificar, eliminar instancias y security groups |
+| AmazonVPCFullAccess | VPC | Crear VPCs, subnets, Internet Gateways, NAT Gateways, Route Tables |
 
-| Política | Propósito | Recursos |
-|----------|-----------|----------|
-| AmazonEC2FullAccess | Crear instancias, security groups | EC2, VPC |
-| AmazonVPCFullAccess | Crear VPCs, subnets, gateways | VPC |
-| AmazonEKSClusterPolicy | Crear y gestionar clusters EKS | EKS |
+**Cuando asignarlo**: Cambios de arquitectura de red, nuevas subnets, modificacion de firewall (security groups).
 
-#### Custom Policies
+---
 
-**1. GovTech-ECR-Admin**
+### GovTech-EKS-Admin
+
+| Permiso | Servicio | Accion permitida |
+|---------|----------|-----------------|
+| AmazonEKSClusterPolicy | EKS | Crear y gestionar clusters, node groups, versiones de Kubernetes |
+| GovTech-IAM-EKS-Roles | IAM | Crear roles para EKS (prefijo eks-* y govtech-*) |
+
+**Cuando asignarlo**: Creacion o actualizacion del cluster EKS, cambios en node groups, actualizaciones de version de Kubernetes.
+
+---
+
+### GovTech-Database-Admin
+
+| Permiso | Servicio | Accion permitida |
+|---------|----------|-----------------|
+| GovTech-RDS-Admin | RDS | Crear instancias, modificar parametros, crear snapshots, restaurar |
+
+**Nota de seguridad**: La politica bloquea eliminacion de instancias con tag `Environment: production`.
+
+**Cuando asignarlo**: Mantenimiento de base de datos, migraciones, backups, ajustes de parametros.
+
+---
+
+### GovTech-Terraform-Operator
+
+| Permiso | Servicio | Accion permitida |
+|---------|----------|-----------------|
+| GovTech-Terraform-State | S3, DynamoDB | Leer/escribir state de Terraform, usar locking de estado |
+| GovTech-S3-Admin | S3 | Crear y gestionar buckets con prefijo govtech-* |
+
+**Cuando asignarlo**: Ejecucion de `terraform apply` o `terraform destroy`, creacion de buckets de la aplicacion.
+
+---
+
+### GovTech-Container-Deploy
+
+| Permiso | Servicio | Accion permitida |
+|---------|----------|-----------------|
+| GovTech-ECR-Admin | ECR | Push y pull de imagenes Docker, crear repositorios |
+| GovTech-EKS-Deploy | EKS, EC2 | kubectl apply, crear volumes para PVCs |
+
+**Cuando asignarlo**: Despliegue de nuevas versiones de la aplicacion, actualizacion de imagenes Docker.
+
+---
+
+### GovTech-ALB-Operator
+
+| Permiso | Servicio | Accion permitida |
+|---------|----------|-----------------|
+| GovTech-ALB-Controller | ELB, ACM | Crear y modificar Application Load Balancers, gestionar certificados TLS |
+| GovTech-AutoScaling | AutoScaling | Configurar HPA, grupos de auto escalado |
+
+**Cuando asignarlo**: Configuracion de Ingress de Kubernetes, gestion de certificados SSL, configuracion de auto escalado.
+
+---
+
+### GovTech-CICD-Operator
+
+| Permiso | Servicio | Accion permitida |
+|---------|----------|-----------------|
+| GovTech-CICD-Access | IAM (OIDC), CodePipeline | Configurar GitHub Actions OIDC, gestionar pipelines |
+| GovTech-ECR-ReadOnly | ECR | Pull de imagenes (sin push) para pipelines |
+
+**Cuando asignarlo**: Configuracion de pipelines de CI/CD, integracion con GitHub Actions.
+
+---
+
+### GovTech-Secrets-ReadOnly
+
+| Permiso | Servicio | Accion permitida |
+|---------|----------|-----------------|
+| GovTech-Secrets-Read | Secrets Manager | Leer secrets de dev y staging (NO produccion) |
+
+**Cuando asignarlo**: Scripts de deployment que necesitan credenciales, diagnostico de problemas de configuracion.
+
+---
+
+### GovTech-Monitor-ReadOnly
+
+| Permiso | Servicio | Accion permitida |
+|---------|----------|-----------------|
+| CloudWatchReadOnlyAccess | CloudWatch | Ver metricas, logs, alarmas (sin modificar) |
+| GovTech-Monitoring | CloudWatch, GuardDuty | Ver dashboards, findings de seguridad |
+
+**Cuando asignarlo**: Rol de SRE (Site Reliability Engineer), on-call, monitoreo de produccion.
+
+---
+
+### GovTech-Security-Auditor
+
+| Permiso | Servicio | Accion permitida |
+|---------|----------|-----------------|
+| SecurityAudit | Multiple | Lectura de configuracion de seguridad en todos los servicios |
+| GovTech-Security-Auditor | CloudTrail, Security Hub, GuardDuty, IAM Analyzer | Leer reportes de auditoria y compliance |
+
+**Cuando asignarlo**: Auditorias de seguridad periodicas, revision de compliance, investigacion de incidentes.
+
+---
+
+## Politicas JSON Detalladas
+
+### GovTech-ECR-Admin
+
 ```json
 {
   "Version": "2012-10-17",
@@ -240,12 +326,53 @@ AWS Account: 835960996869
   ]
 }
 ```
-**Qué permite**: Crear repositorios ECR, subir imágenes Docker
-**Qué NO permite**: Eliminar imágenes de producción (requiere approval)
+
+**Que permite**: Crear repositorios ECR, subir y descargar imagenes Docker.
+**Que NO permite**: Eliminar imagenes de produccion sin proceso de aprobacion.
 
 ---
 
-**2. GovTech-Terraform-State**
+### GovTech-ECR-ReadOnly
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ECRPullOnly",
+      "Effect": "Allow",
+      "Action": [
+        "ecr:GetAuthorizationToken",
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:GetDownloadUrlForLayer",
+        "ecr:BatchGetImage",
+        "ecr:DescribeRepositories",
+        "ecr:ListImages"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "DenyECRPush",
+      "Effect": "Deny",
+      "Action": [
+        "ecr:PutImage",
+        "ecr:InitiateLayerUpload",
+        "ecr:UploadLayerPart",
+        "ecr:CompleteLayerUpload"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+**Que permite**: Descargar imagenes Docker desde ECR (pull).
+**Que NO permite**: Subir imagenes (push), crear o eliminar repositorios.
+
+---
+
+### GovTech-Terraform-State
+
 ```json
 {
   "Version": "2012-10-17",
@@ -276,12 +403,45 @@ AWS Account: 835960996869
   ]
 }
 ```
-**Qué permite**: Leer/escribir Terraform state, usar locking
-**Qué NO permite**: Eliminar bucket de state, modificar otros buckets
+
+**Que permite**: Leer y escribir el estado de Terraform, usar el sistema de locking para evitar conflictos.
+**Que NO permite**: Eliminar el bucket de state, acceder a otros buckets S3.
 
 ---
 
-**3. GovTech-RDS-Admin**
+### GovTech-S3-Admin
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "S3BucketManagement",
+      "Effect": "Allow",
+      "Action": ["s3:*"],
+      "Resource": "arn:aws:s3:::govtech-*"
+    },
+    {
+      "Sid": "S3ObjectManagement",
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject",
+        "s3:GetObject",
+        "s3:DeleteObject"
+      ],
+      "Resource": "arn:aws:s3:::govtech-*/*"
+    }
+  ]
+}
+```
+
+**Que permite**: Crear y gestionar buckets con prefijo `govtech-*`, configurar versionado, encriptacion, CORS.
+**Que NO permite**: Acceder a buckets de otras aplicaciones o sin prefijo `govtech-`.
+
+---
+
+### GovTech-RDS-Admin
+
 ```json
 {
   "Version": "2012-10-17",
@@ -294,7 +454,10 @@ AWS Account: 835960996869
         "rds:ModifyDBInstance",
         "rds:DescribeDBInstances",
         "rds:CreateDBSubnetGroup",
-        "rds:ModifyDBSubnetGroup"
+        "rds:ModifyDBSubnetGroup",
+        "rds:CreateDBSnapshot",
+        "rds:RestoreDBInstanceFromDBSnapshot",
+        "rds:DescribeDBSnapshots"
       ],
       "Resource": "*",
       "Condition": {
@@ -306,9 +469,7 @@ AWS Account: 835960996869
     {
       "Sid": "RDSDeletePrevention",
       "Effect": "Deny",
-      "Action": [
-        "rds:DeleteDBInstance"
-      ],
+      "Action": ["rds:DeleteDBInstance"],
       "Resource": "*",
       "Condition": {
         "StringLike": {
@@ -319,12 +480,14 @@ AWS Account: 835960996869
   ]
 }
 ```
-**Qué permite**: Crear/modificar instancias RDS en us-east-1
-**Qué NO permite**: Eliminar bases de datos de producción (protegidas por tag)
+
+**Que permite**: Crear y modificar instancias RDS en us-east-1, crear y restaurar snapshots.
+**Que NO permite**: Eliminar bases de datos de produccion (protegidas por tag `Environment: production`).
 
 ---
 
-**4. GovTech-IAM-EKS-Roles** (NUEVO v2.0)
+### GovTech-IAM-EKS-Roles
+
 ```json
 {
   "Version": "2012-10-17",
@@ -358,56 +521,14 @@ AWS Account: 835960996869
   ]
 }
 ```
-**Qué permite**: Crear IAM roles necesarios para EKS cluster y worker nodes, crear OIDC providers
-**Qué NO permite**: Crear/modificar usuarios IAM, crear políticas fuera del scope eks-* y govtech-*
-**Por qué se agregó**: Colaborador A no podía crear el cluster EKS en Semana 2 sin estos permisos
+
+**Que permite**: Crear roles IAM necesarios para EKS (node groups, worker nodes, IRSA), crear OIDC providers para GitHub Actions.
+**Que NO permite**: Crear o modificar usuarios IAM, crear roles fuera del prefijo `eks-*` y `govtech-*`.
 
 ---
 
-**5. GovTech-S3-Admin** (NUEVO v2.0)
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Sid": "S3BucketManagement",
-      "Effect": "Allow",
-      "Action": [
-        "s3:CreateBucket",
-        "s3:DeleteBucket",
-        "s3:PutBucketVersioning",
-        "s3:PutEncryptionConfiguration",
-        "s3:PutLifecycleConfiguration",
-        "s3:PutBucketPolicy",
-        "s3:PutBucketCORS",
-        "s3:*"
-      ],
-      "Resource": "arn:aws:s3:::govtech-*"
-    },
-    {
-      "Sid": "S3ObjectManagement",
-      "Effect": "Allow",
-      "Action": [
-        "s3:PutObject",
-        "s3:GetObject",
-        "s3:DeleteObject"
-      ],
-      "Resource": "arn:aws:s3:::govtech-*/*"
-    }
-  ]
-}
-```
-**Qué permite**: Crear y gestionar buckets S3 con prefijo govtech-*, configurar versionado, encriptación, CORS
-**Qué NO permite**: Acceder a buckets de otras aplicaciones, eliminar buckets sin prefijo govtech-*
-**Por qué se agregó**: GovTech-Terraform-State solo permitía acceso al bucket de Terraform state, no podía crear buckets para la aplicación (storage module Semana 3)
+### GovTech-EKS-Deploy
 
----
-
-### Colaborador B: Deployment Team
-
-#### Custom Policies
-
-**1. GovTech-EKS-Deploy**
 ```json
 {
   "Version": "2012-10-17",
@@ -450,49 +571,14 @@ AWS Account: 835960996869
   ]
 }
 ```
-**Qué permite**: Acceder a EKS con kubectl, crear volumes para PVCs
-**Qué NO permite**: Modificar configuración del cluster, crear node groups
+
+**Que permite**: Acceder a EKS con kubectl (`eks:AccessKubernetesApi`), crear volumes EBS para PersistentVolumeClaims de Kubernetes.
+**Que NO permite**: Modificar configuracion del cluster, crear o eliminar node groups.
 
 ---
 
-**2. GovTech-ECR-ReadOnly**
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Sid": "ECRPullOnly",
-      "Effect": "Allow",
-      "Action": [
-        "ecr:GetAuthorizationToken",
-        "ecr:BatchCheckLayerAvailability",
-        "ecr:GetDownloadUrlForLayer",
-        "ecr:BatchGetImage",
-        "ecr:DescribeRepositories",
-        "ecr:ListImages"
-      ],
-      "Resource": "*"
-    },
-    {
-      "Sid": "DenyECRPush",
-      "Effect": "Deny",
-      "Action": [
-        "ecr:PutImage",
-        "ecr:InitiateLayerUpload",
-        "ecr:UploadLayerPart",
-        "ecr:CompleteLayerUpload"
-      ],
-      "Resource": "*"
-    }
-  ]
-}
-```
-**Qué permite**: Descargar imágenes Docker desde ECR (pull)
-**Qué NO permite**: Subir imágenes (push), eliminar imágenes
+### GovTech-Secrets-Read
 
----
-
-**3. GovTech-Secrets-Read**
 ```json
 {
   "Version": "2012-10-17",
@@ -518,20 +604,65 @@ AWS Account: 835960996869
     {
       "Sid": "DenyProdSecrets",
       "Effect": "Deny",
-      "Action": [
-        "secretsmanager:*"
-      ],
+      "Action": ["secretsmanager:*"],
       "Resource": "arn:aws:secretsmanager:us-east-1:*:secret:govtech/prod/*"
     }
   ]
 }
 ```
-**Qué permite**: Leer secrets de dev y staging
-**Qué NO permite**: Leer secrets de producción, modificar secrets
+
+**Que permite**: Leer credenciales de los ambientes de desarrollo y staging.
+**Que NO permite**: Leer ni modificar secrets de produccion, crear o eliminar secrets.
 
 ---
 
-**4. GovTech-ALB-Controller** (NUEVO v2.0)
+### GovTech-CICD-Access
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "GitHubActionsOIDC",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateOpenIDConnectProvider",
+        "iam:GetOpenIDConnectProvider",
+        "iam:TagOpenIDConnectProvider"
+      ],
+      "Resource": "arn:aws:iam::835960996869:oidc-provider/token.actions.githubusercontent.com"
+    },
+    {
+      "Sid": "CICDRoleAssumption",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateRole",
+        "iam:AttachRolePolicy",
+        "iam:PassRole"
+      ],
+      "Resource": "arn:aws:iam::835960996869:role/govtech-cicd-*"
+    },
+    {
+      "Sid": "SecretsForCICD",
+      "Effect": "Allow",
+      "Action": [
+        "secretsmanager:GetSecretValue",
+        "secretsmanager:CreateSecret",
+        "secretsmanager:UpdateSecret"
+      ],
+      "Resource": "arn:aws:secretsmanager:us-east-1:*:secret:govtech/cicd/*"
+    }
+  ]
+}
+```
+
+**Que permite**: Configurar el proveedor OIDC de GitHub Actions, crear roles para pipelines, gestionar secrets de CI/CD.
+**Que NO permite**: Modificar roles de produccion, acceder a secrets de la aplicacion.
+
+---
+
+### GovTech-ALB-Controller
+
 ```json
 {
   "Version": "2012-10-17",
@@ -582,13 +713,14 @@ AWS Account: 835960996869
   ]
 }
 ```
-**Qué permite**: Crear Application Load Balancers, Target Groups, Listeners para Ingress de Kubernetes
-**Qué NO permite**: Modificar load balancers de producción sin tag específico
-**Por qué se agregó**: Colaborador B no podía crear Ingress con ALB en Semana 4, bloqueante crítico para exponer aplicación
+
+**Que permite**: Crear Application Load Balancers para exponer servicios de Kubernetes, gestionar Target Groups y Listeners, consultar certificados TLS de ACM.
+**Que NO permite**: Modificar certificados TLS, eliminar load balancers de produccion sin proceso de aprobacion.
 
 ---
 
-**5. GovTech-AutoScaling** (NUEVO v2.0)
+### GovTech-AutoScaling
+
 ```json
 {
   "Version": "2012-10-17",
@@ -597,246 +729,128 @@ AWS Account: 835960996869
       "Sid": "AutoScalingGroupManagement",
       "Effect": "Allow",
       "Action": [
+        "autoscaling:CreateAutoScalingGroup",
+        "autoscaling:UpdateAutoScalingGroup",
+        "autoscaling:DeleteAutoScalingGroup",
         "autoscaling:DescribeAutoScalingGroups",
-        "autoscaling:PutScalingPolicy",
-        "autoscaling:DescribePolicies",
-        "autoscaling:SetDesiredCapacity"
+        "autoscaling:SetDesiredCapacity",
+        "autoscaling:TerminateInstanceInAutoScalingGroup"
       ],
       "Resource": "*"
     },
     {
-      "Sid": "CloudWatchAlarmsForHPA",
+      "Sid": "EC2ForScaling",
       "Effect": "Allow",
       "Action": [
-        "cloudwatch:PutMetricAlarm",
+        "ec2:DescribeInstances",
+        "ec2:DescribeInstanceTypes",
+        "ec2:DescribeLaunchTemplates"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+**Que permite**: Crear y gestionar grupos de auto escalado, configurar HPA (Horizontal Pod Autoscaler) en Kubernetes.
+**Que NO permite**: Modificar instancias EC2 directamente, cambiar configuracion de red.
+
+---
+
+### GovTech-Monitoring
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "CloudWatchReadAccess",
+      "Effect": "Allow",
+      "Action": [
+        "cloudwatch:GetMetricData",
+        "cloudwatch:GetMetricStatistics",
+        "cloudwatch:ListMetrics",
         "cloudwatch:DescribeAlarms",
-        "cloudwatch:DeleteAlarms"
+        "logs:DescribeLogGroups",
+        "logs:DescribeLogStreams",
+        "logs:GetLogEvents",
+        "logs:FilterLogEvents"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "GuardDutyReadAccess",
+      "Effect": "Allow",
+      "Action": [
+        "guardduty:GetDetector",
+        "guardduty:GetFindings",
+        "guardduty:ListDetectors",
+        "guardduty:ListFindings",
+        "guardduty:GetFindingsStatistics"
       ],
       "Resource": "*"
     }
   ]
 }
 ```
-**Qué permite**: Configurar Horizontal Pod Autoscaler (HPA), crear políticas de auto-scaling, CloudWatch alarms
-**Qué NO permite**: Modificar Auto Scaling Groups manualmente, solo via HPA
-**Por qué se agregó**: Colaborador B no podía configurar HPA en Semana 3, funcionalidad reducida de auto-scaling
+
+**Que permite**: Ver metricas de CloudWatch, leer logs de aplicacion, ver findings de GuardDuty.
+**Que NO permite**: Crear o eliminar alarmas, modificar dashboards, silenciar alertas de seguridad.
 
 ---
 
-### Colaborador C: DevOps Team
-
-#### Custom Policies
-
-**1. GovTech-CICD-Access**
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Sid": "GitHubActionsRole",
-      "Effect": "Allow",
-      "Action": [
-        "iam:CreateRole",
-        "iam:AttachRolePolicy",
-        "iam:PassRole"
-      ],
-      "Resource": "arn:aws:iam::*:role/GovTech-GitHubActions-*",
-      "Condition": {
-        "StringEquals": {
-          "iam:PassedToService": "ecs-tasks.amazonaws.com"
-        }
-      }
-    },
-    {
-      "Sid": "SecretsManagerCICD",
-      "Effect": "Allow",
-      "Action": [
-        "secretsmanager:CreateSecret",
-        "secretsmanager:UpdateSecret",
-        "secretsmanager:GetSecretValue"
-      ],
-      "Resource": "arn:aws:secretsmanager:us-east-1:*:secret:govtech/cicd/*"
-    },
-    {
-      "Sid": "S3ArtifactsAccess",
-      "Effect": "Allow",
-      "Action": [
-        "s3:PutObject",
-        "s3:GetObject",
-        "s3:ListBucket"
-      ],
-      "Resource": [
-        "arn:aws:s3:::govtech-build-artifacts",
-        "arn:aws:s3:::govtech-build-artifacts/*"
-      ]
-    }
-  ]
-}
-```
-**Qué permite**: Crear roles para GitHub Actions, gestionar secrets de CI/CD, almacenar artifacts
-**Qué NO permite**: Crear usuarios IAM, modificar políticas existentes
-
----
-
-**2. GovTech-Monitoring**
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Sid": "CloudWatchFullAccess",
-      "Effect": "Allow",
-      "Action": [
-        "cloudwatch:*",
-        "logs:*"
-      ],
-      "Resource": "*"
-    },
-    {
-      "Sid": "EC2ReadForMonitoring",
-      "Effect": "Allow",
-      "Action": [
-        "ec2:Describe*"
-      ],
-      "Resource": "*"
-    },
-    {
-      "Sid": "EKSReadForMonitoring",
-      "Effect": "Allow",
-      "Action": [
-        "eks:DescribeCluster",
-        "eks:ListClusters"
-      ],
-      "Resource": "*"
-    }
-  ]
-}
-```
-**Qué permite**: Crear dashboards, alarmas, log groups en CloudWatch
-**Qué NO permite**: Modificar recursos EC2/EKS (solo lectura)
-
----
-
-## Matriz de Permisos
-
-| Servicio AWS | Root | Colab A (Infra) | Colab B (Deploy) | Colab C (DevOps) |
-|--------------|------|-----------------|------------------|------------------|
-| **IAM Users** | Full | - | - | - |
-| **IAM Roles** | Full | Create (EKS/EC2) | PassRole (ALB) | Create (CICD) |
-| **IAM OIDC** | Full | Create (EKS) | - | - |
-| **EC2** | Full | Full | Read-only | Read-only |
-| **VPC** | Full | Full | - | - |
-| **EKS** | Full | Create/Modify | kubectl access | Read-only |
-| **ECR** | Full | Push/Pull | Pull-only | Push/Pull (CI) |
-| **RDS** | Full | Create/Modify | - | - |
-| **S3** | Full | Full (govtech-*) | - | Artifacts |
-| **ELB/ALB** | Full | - | Create/Modify | - |
-| **Auto Scaling** | Full | - | Policies/HPA | - |
-| **ACM** | Full | - | Read (certs) | - |
-| **Secrets Manager** | Full | - | Read (dev/stg) | Full (CICD secrets) |
-| **CloudWatch** | Full | Logs | Logs + Alarms | Full |
-| **CloudShell** | Full | Full | Full | Full |
-| **Console Access** | Full | Read-only | Read-only | Read-only |
-| **Billing** | Full | - | - | - |
-
-**Leyenda**:
-- **Full**: Acceso completo (create, read, update, delete)
-- **Create/Modify**: Crear y modificar, NO eliminar
-- **Read-only**: Solo lectura
-- **-**: Sin acceso
-
----
-
-## Boundary Policies
-
-### IMPORTANTE: Permission Boundaries REMOVIDAS en v2.0
-
-**Razón de remoción**: Las Permission Boundaries estaban bloqueando el acceso a la consola web de AWS.
-
-**Problema identificado**:
-```
-DenyRegionOutsideUSEast1 bloqueaba servicios globales como:
-- IAM (global, no tiene región)
-- CloudFront (global)
-- Route53 (global)
-- AWS Console login (global)
-
-Resultado: Usuarios no podían iniciar sesión en AWS Console
-```
-
-**Solución implementada**:
-- Eliminadas Permission Boundaries de todos los usuarios
-- Confiamos en las políticas restrictivas por grupo (Least Privilege)
-- Agregada ReadOnlyAccess para navegación básica de consola
-- Mantenemos auditoría con CloudTrail
-
-**Nota**: Si en el futuro se requieren Boundaries, usar solo para restricciones específicas, NO para regiones.
-
-### ¿Qué son? (Referencia histórica)
-
-**Permission Boundaries** son límites MÁXIMOS que un usuario NO puede sobrepasar, incluso si tiene políticas que lo permiten.
-
-**Uso**: Prevenir escalación de privilegios.
-
-### Boundary Policy Original (DESHABILITADA - Solo referencia)
+### GovTech-Security-Auditor
 
 ```json
 {
   "Version": "2012-10-17",
   "Statement": [
     {
-      "Sid": "AllowedServices",
+      "Sid": "CloudTrailReadOnly",
       "Effect": "Allow",
       "Action": [
-        "ec2:*",
-        "eks:*",
-        "ecr:*",
-        "rds:*",
-        "s3:*",
-        "vpc:*",
-        "cloudwatch:*",
-        "logs:*",
-        "secretsmanager:*",
-        "iam:CreateRole",
-        "iam:AttachRolePolicy",
-        "iam:PassRole"
+        "cloudtrail:GetTrail",
+        "cloudtrail:GetTrailStatus",
+        "cloudtrail:ListTrails",
+        "cloudtrail:LookupEvents",
+        "cloudtrail:GetEventSelectors",
+        "cloudtrail:DescribeTrails"
       ],
       "Resource": "*"
     },
     {
-      "Sid": "DenyDangerousActions",
-      "Effect": "Deny",
+      "Sid": "SecurityHubReadOnly",
+      "Effect": "Allow",
       "Action": [
-        "iam:CreateUser",
-        "iam:DeleteUser",
-        "iam:CreateAccessKey",
-        "iam:DeleteAccessKey",
-        "iam:UpdateUser",
-        "iam:CreatePolicy",
-        "iam:DeletePolicy",
-        "organizations:*",
-        "account:*"
+        "securityhub:GetFindings",
+        "securityhub:ListFindings",
+        "securityhub:GetInsights",
+        "securityhub:GetEnabledStandards",
+        "securityhub:DescribeHub",
+        "securityhub:DescribeStandards",
+        "securityhub:DescribeStandardsControls"
       ],
       "Resource": "*"
     },
     {
-      "Sid": "DenyRegionOutsideUSEast1",
-      "Effect": "Deny",
-      "Action": "*",
-      "Resource": "*",
-      "Condition": {
-        "StringNotEquals": {
-          "aws:RequestedRegion": "us-east-1"
-        }
-      }
+      "Sid": "IAMAccessAnalyzerReadOnly",
+      "Effect": "Allow",
+      "Action": [
+        "access-analyzer:ListAnalyzers",
+        "access-analyzer:GetAnalyzer",
+        "access-analyzer:ListFindings",
+        "access-analyzer:GetFinding"
+      ],
+      "Resource": "*"
     },
     {
-      "Sid": "DenyRootAccountChanges",
-      "Effect": "Deny",
+      "Sid": "ConfigReadOnly",
+      "Effect": "Allow",
       "Action": [
-        "iam:DeleteAccountPasswordPolicy",
-        "iam:UpdateAccountPasswordPolicy",
-        "iam:DeleteAccountAlias"
+        "config:GetComplianceSummaryByConfigRule",
+        "config:GetComplianceDetailsByConfigRule",
+        "config:DescribeConfigRules",
+        "config:ListDiscoveredResources"
       ],
       "Resource": "*"
     }
@@ -844,490 +858,135 @@ Resultado: Usuarios no podían iniciar sesión en AWS Console
 }
 ```
 
-**Qué previene**:
-- Crear/eliminar usuarios IAM (solo root puede)
-- Trabajar fuera de us-east-1 (control de costos)
-- Modificar configuración de la cuenta root
-- Modificar AWS Organizations
+**Que permite**: Leer el historial completo de acciones en CloudTrail, ver findings de Security Hub, revisar IAM Access Analyzer, consultar reglas de AWS Config.
+**Que NO permite**: Modificar nada; es acceso estrictamente de solo lectura.
 
 ---
 
-## Auditoría y Compliance
+## Auditoria y Compliance
 
-### CloudTrail (Logging)
+### Alertas por nivel
 
-**Configuración obligatoria**:
-```
-CloudTrail habilitado para TODAS las acciones:
-- Management events: SI
-- Data events: SI (S3, Lambda)
-- Retention: 90 días mínimo
-- Log file validation: HABILITADO
-- Multi-region: HABILITADO
-```
+| Nivel | Alerta configurada |
+|-------|--------------------|
+| Nivel 1 Critico | Alerta INMEDIATA en CloudWatch + notificacion por email |
+| Nivel 2 Operacional | Registro en CloudTrail + alerta si patron inusual (GuardDuty) |
+| Nivel 3 Solo lectura | Solo registro en CloudTrail |
 
-**Qué se registra**:
-- Quién (usuario IAM)
-- Qué (acción ejecutada)
-- Cuándo (timestamp)
-- Desde dónde (IP address)
-- Resultado (exitoso o fallido)
-
-**Alertas automáticas** (CloudWatch Events):
-```
-- Usuario crea otro usuario → Alerta a root
-- Eliminación de recursos de producción → Alerta a root
-- Acceso denegado repetido (5+ veces) → Posible ataque
-- Cambios en políticas IAM → Alerta a root
-```
-
----
-
-### Revisión de Accesos
-
-**Frecuencia**: Mensual
-
-**Checklist**:
-- [ ] Revisar usuarios activos vs inactivos (eliminar no usados)
-- [ ] Revisar Access Keys (rotar cada 90 días)
-- [ ] Revisar políticas adjuntas a grupos
-- [ ] Verificar que MFA esté habilitado
-- [ ] Revisar logs de CloudTrail para actividad anómala
-- [ ] Verificar que boundary policies estén aplicadas
-- [ ] Revisar permisos de recursos (S3 buckets públicos)
-
-**Herramienta**: AWS IAM Access Analyzer
-
----
-
-### Compliance
-
-**Estándares aplicados**:
-- **Least Privilege**: Solo permisos necesarios
-- **Separation of Duties**: Funciones separadas por colaborador
-- **Defense in Depth**: Múltiples capas (policies + boundaries + MFA)
-- **Audit Trail**: CloudTrail registra todo
-- **Encryption**: Secrets encriptados (Secrets Manager, KMS)
-
----
-
-## Procedimientos de Implementación
-
-### Paso 1: Crear Grupos IAM
+### Comandos de auditoria
 
 ```bash
-# Como root account en AWS Console
+# Ver todas las acciones recientes de un usuario
+aws cloudtrail lookup-events \
+  --lookup-attributes AttributeKey=Username,AttributeValue=govtech-admin \
+  --start-time 2026-02-01 \
+  --end-time 2026-02-28 \
+  --output table
 
-1. IAM → Groups → Create group
-   Name: GovTech-Infrastructure
+# Ver acciones de tipo "delete" en los ultimos 7 dias
+aws cloudtrail lookup-events \
+  --lookup-attributes AttributeKey=EventName,AttributeValue=DeleteDBInstance \
+  --output table
 
-2. IAM → Groups → Create group
-   Name: GovTech-Deployment
+# Ver todos los grupos de un usuario
+aws iam list-groups-for-user \
+  --user-name govtech-admin \
+  --query 'Groups[].GroupName' \
+  --output table
 
-3. IAM → Groups → Create group
-   Name: GovTech-DevOps
+# Ver todas las politicas adjuntas a un grupo
+aws iam list-attached-group-policies \
+  --group-name GovTech-EKS-Admin \
+  --query 'AttachedPolicies[].{Nombre:PolicyName,ARN:PolicyArn}' \
+  --output table
+
+# Ver access keys activas y su antiguedad
+aws iam list-access-keys \
+  --user-name govtech-admin \
+  --query 'AccessKeyMetadata[].{ID:AccessKeyId,Estado:Status,Creado:CreateDate}' \
+  --output table
 ```
+
+### Checklist de revision mensual
+
+- [ ] Revisar CloudTrail: buscar acciones inusuales o fuera de horario
+- [ ] Verificar que no existen access keys con mas de 90 dias sin rotar
+- [ ] Confirmar que MFA esta activo en el usuario operador
+- [ ] Revisar findings activos en Security Hub y GuardDuty
+- [ ] Validar que no hay usuarios sin asignar a grupos o con permisos directos
+- [ ] Confirmar que no existen roles IAM con permisos excesivos creados fuera del scope
 
 ---
 
-### Paso 2: Crear Políticas Custom
+## Procedimientos de Implementacion
+
+### Setup inicial
 
 ```bash
-# Como root account
-
-1. IAM → Policies → Create policy
-   Name: GovTech-ECR-Admin
-   JSON: [copiar JSON de arriba]
-
-2. Repeat para todas las custom policies:
-   - GovTech-Terraform-State
-   - GovTech-RDS-Admin
-   - GovTech-EKS-Deploy
-   - GovTech-ECR-ReadOnly
-   - GovTech-Secrets-Read
-   - GovTech-CICD-Access
-   - GovTech-Monitoring
+cd aws/iam
+./setup-iam-v2.sh
 ```
 
----
-
-### Paso 3: Adjuntar Políticas a Grupos
+### Agregar un nuevo miembro al equipo
 
 ```bash
-# Grupo: GovTech-Infrastructure
-Attach policies:
-  - AmazonEC2FullAccess (AWS Managed)
-  - AmazonVPCFullAccess (AWS Managed)
-  - AmazonEKSClusterPolicy (AWS Managed)
-  - ReadOnlyAccess (AWS Managed) ← NUEVO v2.0
-  - AWSCloudShellFullAccess (AWS Managed) ← NUEVO v2.0
-  - GovTech-ECR-Admin (Custom)
-  - GovTech-Terraform-State (Custom)
-  - GovTech-RDS-Admin (Custom)
-  - GovTech-IAM-EKS-Roles (Custom) ← NUEVO v2.0
-  - GovTech-S3-Admin (Custom) ← NUEVO v2.0
+# 1. Crear el usuario
+aws iam create-user --user-name nombre.apellido
 
-# Grupo: GovTech-Deployment
-Attach policies:
-  - AmazonEKSWorkerNodePolicy (AWS Managed)
-  - AmazonEKS_CNI_Policy (AWS Managed)
-  - ReadOnlyAccess (AWS Managed) ← NUEVO v2.0
-  - AWSCloudShellFullAccess (AWS Managed) ← NUEVO v2.0
-  - GovTech-EKS-Deploy (Custom)
-  - GovTech-ECR-ReadOnly (Custom)
-  - GovTech-Secrets-Read (Custom)
-  - GovTech-ALB-Controller (Custom) ← NUEVO v2.0
-  - GovTech-AutoScaling (Custom) ← NUEVO v2.0
+# 2. Asignar solo los grupos necesarios para su funcion
+aws iam add-user-to-group \
+  --user-name nombre.apellido \
+  --group-name GovTech-Monitor-ReadOnly
 
-# Grupo: GovTech-DevOps
-Attach policies:
-  - CloudWatchFullAccess (AWS Managed)
-  - ReadOnlyAccess (AWS Managed) ← NUEVO v2.0
-  - AWSCloudShellFullAccess (AWS Managed) ← NUEVO v2.0
-  - GovTech-CICD-Access (Custom)
-  - GovTech-Monitoring (Custom)
+# 3. Crear acceso a consola con password temporal
+aws iam create-login-profile \
+  --user-name nombre.apellido \
+  --password "TempPass2026!" \
+  --password-reset-required
+
+# 4. Si necesita acceso temporal a un dominio adicional:
+aws iam add-user-to-group \
+  --user-name nombre.apellido \
+  --group-name GovTech-Database-Admin
+
+# 5. Al terminar la tarea temporal, revocar el acceso:
+aws iam remove-user-from-group \
+  --user-name nombre.apellido \
+  --group-name GovTech-Database-Admin
 ```
 
----
+### Asignacion recomendada por rol
 
-### Paso 4: Crear Usuarios y Asignar a Grupos
+| Rol | Grupos recomendados |
+|-----|---------------------|
+| Arquitecto cloud | GovTech-Network-Admin, GovTech-EKS-Admin, GovTech-Terraform-Operator (acceso temporal) |
+| DevOps engineer | GovTech-Container-Deploy, GovTech-CICD-Operator |
+| SRE / On-call | GovTech-Monitor-ReadOnly, GovTech-Secrets-ReadOnly |
+| DBA | GovTech-Database-Admin (acceso temporal para mantenimiento) |
+| Analista de seguridad | GovTech-Security-Auditor |
+| Developer (deploy propio) | GovTech-Container-Deploy |
+
+### Rotar access keys
 
 ```bash
-# Crear usuarios
-1. IAM → Users → Add users
-   Username: collab-infrastructure
-   Access: Programmatic + Console
-   Group: GovTech-Infrastructure
+# Crear nueva key
+aws iam create-access-key --user-name govtech-admin
 
-2. Repeat:
-   Username: collab-deployment
-   Group: GovTech-Deployment
+# Desactivar la anterior (no eliminar todavia)
+aws iam update-access-key \
+  --user-name govtech-admin \
+  --access-key-id AKIA_KEY_ANTIGUA \
+  --status Inactive
 
-3. Repeat:
-   Username: collab-devops
-   Group: GovTech-DevOps
+# Despues de confirmar que la nueva key funciona, eliminar la anterior
+aws iam delete-access-key \
+  --user-name govtech-admin \
+  --access-key-id AKIA_KEY_ANTIGUA
 ```
 
 ---
 
-### Paso 5: Aplicar Boundary Policy
-
-**DESHABILITADO en v2.0** - Las Permission Boundaries fueron removidas porque bloqueaban acceso a la consola web.
-
-Si deseas implementar boundaries en el futuro, asegúrate de NO bloquear servicios globales (IAM, CloudFront, Console login).
-
----
-
-### Paso 6: Habilitar MFA
-
-```bash
-# Para cada usuario
-1. IAM → Users → [username]
-2. Security credentials tab
-3. Assigned MFA device → Manage
-4. Virtual MFA device (Google Authenticator)
-5. Scan QR code
-6. Enter two consecutive codes
-```
-
----
-
-### Paso 7: Configurar CloudTrail
-
-```bash
-1. CloudTrail → Create trail
-   Name: govtech-audit-trail
-   Apply to all regions: YES
-   Management events: Read/Write
-   Data events: S3 (all buckets)
-   S3 bucket: govtech-cloudtrail-logs
-   Log file validation: ENABLED
-
-2. CloudWatch Events → Create rule
-   Event pattern: IAM changes
-   Target: SNS topic → Email to root admin
-```
-
----
-
-### Paso 8: Distribuir Credenciales
-
-```bash
-# Generar credenciales para cada colaborador
-1. IAM → Users → [username] → Security credentials
-2. Create access key
-3. Download .csv
-4. Enviar de forma segura (encrypted email, 1Password, etc.)
-
-# Instruir a cada colaborador:
-aws configure
-AWS Access Key ID: [su key]
-AWS Secret Access Key: [su secret]
-Default region: us-east-1
-```
-
----
-
-## Testing de Permisos
-
-### Test 1: Colaborador A (Infrastructure)
-
-```bash
-# Debe funcionar
-aws ecr create-repository --repository-name test-repo
-aws vpc create-vpc --cidr-block 10.0.0.0/16
-terraform init
-terraform plan
-
-# Debe fallar
-aws iam create-user --user-name hacker
-# Output: AccessDenied (boundary policy lo previene)
-
-aws rds delete-db-instance --db-instance-identifier govtech-prod
-# Output: AccessDenied (producción protegida)
-```
-
----
-
-### Test 2: Colaborador B (Deployment)
-
-```bash
-# Debe funcionar
-aws eks update-kubeconfig --name govtech-dev
-kubectl get pods -n govtech-dev
-kubectl apply -f deployment.yaml
-
-# Debe fallar
-aws ecr create-repository --repository-name hack-repo
-# Output: AccessDenied (no tiene permisos de ECR admin)
-
-aws secretsmanager get-secret-value --secret-id govtech/prod/db-password
-# Output: AccessDenied (producción bloqueada)
-```
-
----
-
-### Test 3: Colaborador C (DevOps)
-
-```bash
-# Debe funcionar
-aws cloudwatch put-metric-alarm --alarm-name test-alarm
-aws logs create-log-group --log-group-name /aws/eks/govtech
-aws secretsmanager create-secret --name govtech/cicd/test
-
-# Debe fallar
-aws ec2 create-vpc --cidr-block 10.0.0.0/16
-# Output: AccessDenied (no puede crear infraestructura)
-
-aws iam create-user --user-name hacker
-# Output: AccessDenied (boundary policy)
-```
-
----
-
-## Resumen Ejecutivo
-
-### Principios Implementados
-
-| Principio | Implementación |
-|-----------|----------------|
-| **Least Privilege** | Cada colaborador solo tiene permisos para SU trabajo |
-| **Separation of Duties** | Infraestructura, Deployment y DevOps separados |
-| **Defense in Depth** | Políticas + Boundaries + MFA + CloudTrail |
-| **Fail Secure** | Deny por defecto, Allow explícito |
-| **Auditability** | CloudTrail registra todas las acciones |
-
----
-
-### Costos de Seguridad
-
-| Servicio | Costo/mes | Propósito |
-|----------|-----------|-----------|
-| CloudTrail | $2-5 | Logging de auditoría |
-| AWS Secrets Manager | $1-3 | Almacenar secrets |
-| CloudWatch Logs | $3-10 | Logs de aplicación |
-| IAM | GRATIS | Gestión de permisos |
-| **Total** | **~$6-18/mes** | Seguridad completa |
-
----
-
-### Beneficios
-
-1. **Reducción de riesgo**: Credenciales comprometidas causan daño limitado
-2. **Compliance**: Cumple con estándares de seguridad
-3. **Auditoría**: Saber quién hizo qué y cuándo
-4. **Escalabilidad**: Fácil agregar nuevos colaboradores
-5. **Reversibilidad**: Fácil revocar permisos si es necesario
-
----
-
-## Apéndices
-
-### Apéndice A: Comandos Útiles
-
-```bash
-# Ver políticas de un grupo
-aws iam list-attached-group-policies --group-name GovTech-Infrastructure
-
-# Ver usuarios en un grupo
-aws iam get-group --group-name GovTech-Infrastructure
-
-# Simular política (ver si una acción está permitida)
-aws iam simulate-principal-policy \
-  --policy-source-arn arn:aws:iam::123456789012:user/collab-deployment \
-  --action-names eks:DescribeCluster
-
-# Ver access keys de un usuario
-aws iam list-access-keys --user-name collab-infrastructure
-
-# Ver eventos de CloudTrail (últimas acciones)
-aws cloudtrail lookup-events --max-results 10
-```
-
----
-
-### Apéndice B: Escalación de Permisos
-
-Si un colaborador necesita permisos temporales adicionales:
-
-```bash
-# Opción 1: Crear rol temporal (recomendado)
-aws iam create-role --role-name TempAdminAccess
-aws iam attach-role-policy --role-name TempAdminAccess --policy-arn ...
-aws sts assume-role --role-arn arn:aws:iam::...:role/TempAdminAccess
-
-# Opción 2: Agregar a grupo temporal (menos recomendado)
-aws iam add-user-to-group --user-name collab-infrastructure --group-name TempAdmins
-# Remover después: aws iam remove-user-from-group ...
-```
-
-**Proceso**:
-1. Colaborador solicita permisos adicionales (ticket/email)
-2. Root aprueba y crea rol temporal
-3. Colaborador asume rol con `aws sts assume-role`
-4. Permisos expiran automáticamente después de 1 hora
-5. Root revoca rol cuando ya no es necesario
-
----
-
-### Apéndice C: Incident Response
-
-**Si un usuario es comprometido**:
-
-```bash
-# 1. Deshabilitar access keys inmediatamente
-aws iam update-access-key --access-key-id AKIA... --status Inactive --user-name collab-infrastructure
-
-# 2. Revisar CloudTrail para acciones sospechosas
-aws cloudtrail lookup-events --lookup-attributes AttributeKey=Username,AttributeValue=collab-infrastructure
-
-# 3. Revocar sesiones activas
-aws iam delete-login-profile --user-name collab-infrastructure
-
-# 4. Crear nuevas access keys
-aws iam create-access-key --user-name collab-infrastructure
-
-# 5. Notificar al colaborador y cambiar credenciales
-```
-
----
-
----
-
-## Changelog - Versión 2.0 (2026-02-13)
-
-### Cambios Realizados
-
-#### 1. Eliminación de Permission Boundaries
-**Fecha**: 2026-02-12
-**Razón**: Bloqueaban acceso a AWS Console (servicios globales)
-**Comando ejecutado**:
-```bash
-aws iam delete-user-permissions-boundary --user-name collab-infrastructure
-aws iam delete-user-permissions-boundary --user-name collab-deployment
-aws iam delete-user-permissions-boundary --user-name collab-devops
-```
-
-#### 2. Adición de ReadOnlyAccess
-**Fecha**: 2026-02-12
-**Razón**: Permitir acceso básico a AWS Console web para todos los colaboradores
-**Comando ejecutado**:
-```bash
-aws iam attach-group-policy --group-name GovTech-Infrastructure --policy-arn arn:aws:iam::aws:policy/ReadOnlyAccess
-aws iam attach-group-policy --group-name GovTech-Deployment --policy-arn arn:aws:iam::aws:policy/ReadOnlyAccess
-aws iam attach-group-policy --group-name GovTech-DevOps --policy-arn arn:aws:iam::aws:policy/ReadOnlyAccess
-```
-
-#### 3. Adición de AWSCloudShellFullAccess
-**Fecha**: 2026-02-12
-**Razón**: Permitir uso de AWS CloudShell para todos los colaboradores
-**Comando ejecutado**:
-```bash
-aws iam attach-group-policy --group-name GovTech-Infrastructure --policy-arn arn:aws:iam::aws:policy/AWSCloudShellFullAccess
-aws iam attach-group-policy --group-name GovTech-Deployment --policy-arn arn:aws:iam::aws:policy/AWSCloudShellFullAccess
-aws iam attach-group-policy --group-name GovTech-DevOps --policy-arn arn:aws:iam::aws:policy/AWSCloudShellFullAccess
-```
-
-#### 4. Nuevas Políticas Custom
-
-**GovTech-IAM-EKS-Roles** (Colaborador A)
-- **Fecha**: 2026-02-13
-- **Razón**: Permitir creación de IAM roles para EKS cluster (bloqueante Semana 2)
-- **Archivos**: `aws/iam/policies/govtech-iam-eks-roles.json`
-
-**GovTech-S3-Admin** (Colaborador A)
-- **Fecha**: 2026-02-13
-- **Razón**: Gestión completa de buckets S3 para aplicación (limitado solo a Terraform state antes)
-- **Archivos**: `aws/iam/policies/govtech-s3-admin.json`
-
-**GovTech-ALB-Controller** (Colaborador B)
-- **Fecha**: 2026-02-13
-- **Razón**: Permitir creación de Application Load Balancers para Ingress (bloqueante Semana 4)
-- **Archivos**: `aws/iam/policies/govtech-alb-controller.json`
-
-**GovTech-AutoScaling** (Colaborador B)
-- **Fecha**: 2026-02-13
-- **Razón**: Permitir configuración de HPA (Horizontal Pod Autoscaler) en Semana 3
-- **Archivos**: `aws/iam/policies/govtech-autoscaling.json`
-
-**Script de instalación**: `aws/iam/add-missing-permissions.sh`
-
-#### 5. Auditoría de Permisos Completa
-**Fecha**: 2026-02-13
-**Documento**: `aws/iam/PERMISSION_AUDIT.md`
-**Resultado**: Identificadas 4 brechas de permisos críticas, todas resueltas
-
----
-
-## Notas de Seguridad v2.0
-
-**Mejoras**:
-- Colaboradores pueden usar AWS Console para visualizar recursos (solo lectura)
-- CloudShell habilitado para trabajo remoto sin configurar AWS CLI localmente
-- Permisos IAM suficientes para completar todas las tareas del proyecto
-- Sin bloqueantes identificados para Semanas 2-4
-
-**Consideraciones**:
-- ReadOnlyAccess es amplio, pero seguro (solo lectura)
-- Mantenemos principio de Least Privilege en acciones de escritura
-- CloudTrail sigue registrando todas las acciones
-- Sin Permission Boundaries, pero políticas siguen siendo restrictivas
-
-**Riesgos Mitigados**:
-- Usuarios no pueden crear/eliminar usuarios IAM
-- Usuarios no pueden modificar políticas
-- Usuarios no pueden acceder a billing
-- Recursos limitados por prefijos (govtech-*, eks-*)
-- Producción protegida por tags
-
----
-
-**Documento creado por**: GovTech Security Team
-**Versión 1.0**: 2026-02-10
-**Versión 2.0**: 2026-02-13
-**Última revisión**: 2026-02-13
-**Próxima revisión**: 2026-05-13 (cada 90 días)
-
----
-
-**FIN DEL DOCUMENTO**
+**Creado**: 2026-02-12
+**Actualizado**: 2026-02-23
+**Version**: 3.0
+**Mantenido por**: Equipo de infraestructura GovTech

@@ -1,6 +1,6 @@
 # Architecture Optimizations - Performance & Efficiency
 
-## 🎯 Current Performance Baseline
+## Current Performance Baseline
 
 ```
 Response Time: 200-500ms (acceptable)
@@ -12,7 +12,7 @@ API Throughput: ~2,000 req/min
 
 ---
 
-## 🚀 Quick Wins (High Impact, Low Effort)
+## Quick Wins (High Impact, Low Effort)
 
 ### 1. **Redis Cache Layer**
 ```
@@ -21,7 +21,7 @@ Time: 2-3 days
 Cost: +$100/month
 
 Current: Every request hits database
-After:   Redis cache (in-memory) → 10-50ms response vs 200ms
+After: Redis cache (in-memory) → 10-50ms response vs 200ms
 
 Example:
 - "Get all trámites" query: 200ms → 15ms (13x faster)
@@ -35,7 +35,7 @@ Time: 1 day
 Cost: +$50/month
 
 Current: Frontend served from EKS in us-east-1
-After:   Cached in 200+ edge locations worldwide
+After: Cached in 200+ edge locations worldwide
 
 Example:
 - User in Peru: 800ms → 100ms (8x faster)
@@ -50,7 +50,7 @@ Time: 1 day
 Cost: $0
 
 Current: Full table scans on searches
-After:   Indexed columns (ciudadanoId, estado, fechaCreacion)
+After: Indexed columns (ciudadanoId, estado, fechaCreacion)
 
 Example:
 - Search trámites by citizen: 2 seconds → 50ms (40x faster)
@@ -64,7 +64,7 @@ Time: 2 hours
 Cost: $0
 
 Current: New database connection per request (slow)
-After:   Reuse connections from pool
+After: Reuse connections from pool
 
 Example:
 - Concurrent users: 5,000 → 25,000 (5x capacity)
@@ -78,7 +78,7 @@ Time: 1 hour
 Cost: $0
 
 Current: 500KB JSON response
-After:   150KB compressed (70% reduction)
+After: 150KB compressed (70% reduction)
 
 Example:
 - Mobile users (3G): 8 seconds → 2.5 seconds (3x faster)
@@ -87,7 +87,7 @@ Example:
 
 ---
 
-## 💪 Medium Effort Improvements
+## Medium Effort Improvements
 
 ### 6. **Horizontal Pod Autoscaling (HPA)**
 ```
@@ -96,7 +96,7 @@ Time: 1 day
 Cost: Pay per usage (elastic)
 
 Current: Fixed 2 pods, crashes at 10K concurrent users
-After:   Auto-scales based on CPU/memory
+After: Auto-scales based on CPU/memory
 
 Example:
 - Normal load: 2 pods ($200/month)
@@ -111,7 +111,7 @@ Time: 2 days
 Cost: +$300/month (1 replica)
 
 Current: All reads/writes hit primary database (bottleneck)
-After:   Writes → Primary, Reads → Replicas
+After: Writes → Primary, Reads → Replicas
 
 Example:
 - Read capacity: 1,000 queries/sec → 10,000 queries/sec
@@ -125,7 +125,7 @@ Time: 3 days
 Cost: +$50/month (SQS)
 
 Current: User waits for PDF generation, email sending (slow)
-After:   Immediate response, jobs processed in background
+After: Immediate response, jobs processed in background
 
 Example:
 - Generate certificate PDF: User waits 5 seconds → Returns instantly
@@ -139,7 +139,7 @@ Time: 1 day
 Cost: $0
 
 Current: HTTP/1.1 (one request at a time)
-After:   HTTP/2 (multiplexed, parallel requests)
+After: HTTP/2 (multiplexed, parallel requests)
 
 Example:
 - Page with 10 resources: 10 serial requests → 1 parallel request
@@ -153,7 +153,7 @@ Time: 2 days
 Cost: $0
 
 Current: JPEG/PNG images, all loaded immediately
-After:   WebP format (smaller), load only when visible
+After: WebP format (smaller), load only when visible
 
 Example:
 - Certificate image: 500KB → 150KB (70% reduction)
@@ -162,7 +162,7 @@ Example:
 
 ---
 
-## 🔥 Advanced Optimizations
+## Advanced Optimizations
 
 ### 11. **Database Sharding**
 ```
@@ -171,7 +171,7 @@ Time: 2 weeks
 Cost: +$1,000/month
 
 Current: Single database (500GB limit)
-After:   Multiple databases by region/department
+After: Multiple databases by region/department
 
 Example:
 - Shard 1: Department of Antioquia (6M citizens)
@@ -186,7 +186,7 @@ Time: 2 weeks
 Cost: $0
 
 Current: Multiple REST calls to build a page (over-fetching)
-After:   Single GraphQL query, exact data needed
+After: Single GraphQL query, exact data needed
 
 Example:
 - Dashboard page: 5 REST calls (500KB total) → 1 GraphQL (100KB)
@@ -200,7 +200,7 @@ Time: 1 week
 Cost: +$100/month
 
 Current: Backend in us-east-1, slow for distant users
-After:   Lambda@Edge runs code at CDN edge (200+ locations)
+After: Lambda@Edge runs code at CDN edge (200+ locations)
 
 Example:
 - User in Argentina checks status → Edge function in São Paulo (50ms)
@@ -214,7 +214,7 @@ Time: 3 days
 Cost: $0
 
 Current: Slow queries with JOINs, subqueries
-After:   Optimized with proper indexes, query rewrite
+After: Optimized with proper indexes, query rewrite
 
 Example:
 - Admin dashboard query: 8 seconds → 200ms (40x faster)
@@ -228,7 +228,7 @@ Time: 1 month
 Cost: +$2,000/month
 
 Current: Single region (us-east-1), slow for LATAM users
-After:   Regions in US + São Paulo + Europe
+After: Regions in US + São Paulo + Europe
 
 Example:
 - Brazil users: 400ms → 50ms (8x faster)
@@ -237,31 +237,31 @@ Example:
 
 ---
 
-## 📊 Impact Matrix (Effort vs Gain)
+## Impact Matrix (Effort vs Gain)
 
 ```
 High Impact, Low Effort (DO FIRST):
-├── Redis Cache (3 days) → 80% faster
-├── CloudFront CDN (1 day) → 60% faster page loads
-├── Database Indexing (1 day) → 90% faster queries
-├── Connection Pooling (2 hours) → 5x more users
-└── Gzip Compression (1 hour) → 70% smaller responses
+Redis Cache (3 days) → 80% faster
+CloudFront CDN (1 day) → 60% faster page loads
+Database Indexing (1 day) → 90% faster queries
+Connection Pooling (2 hours) → 5x more users
+Gzip Compression (1 hour) → 70% smaller responses
 
 Medium Impact, Medium Effort (DO NEXT):
-├── HPA Auto-scaling (1 day) → Handle traffic spikes
-├── Read Replicas (2 days) → 10x read capacity
-├── Async Queue (3 days) → 95% faster perceived response
-└── HTTP/2 (1 day) → 30% faster loads
+HPA Auto-scaling (1 day) → Handle traffic spikes
+Read Replicas (2 days) → 10x read capacity
+Async Queue (3 days) → 95% faster perceived response
+HTTP/2 (1 day) → 30% faster loads
 
 High Impact, High Effort (IF NEEDED FOR SCALE):
-├── Database Sharding (2 weeks) → 100M+ citizens
-├── GraphQL (2 weeks) → 60% less data transfer
-└── Multi-region (1 month) → Global low latency
+Database Sharding (2 weeks) → 100M+ citizens
+GraphQL (2 weeks) → 60% less data transfer
+Multi-region (1 month) → Global low latency
 ```
 
 ---
 
-## 🎯 Recommended Implementation Order
+## Recommended Implementation Order
 
 ### **Phase 1: Quick Wins (1 week)**
 1. Database indexing (1 day)
@@ -286,7 +286,7 @@ High Impact, High Effort (IF NEEDED FOR SCALE):
 
 ---
 
-## 💰 Cost Comparison
+## Cost Comparison
 
 ### **Current Architecture:**
 ```
@@ -310,7 +310,7 @@ ROI: For massive scale
 
 ---
 
-## 🏆 My Recommendation
+## My Recommendation
 
 **For Hackathon (2 weeks left):**
 
@@ -333,7 +333,7 @@ Implement **Phase 1 only:**
 
 ---
 
-## 📈 Performance Metrics to Show Judges
+## Performance Metrics to Show Judges
 
 ### **Before Optimizations:**
 ```
@@ -345,63 +345,63 @@ Concurrent Users: 5,000
 
 ### **After Phase 1 (1 week):**
 ```
-Average Response Time: 25ms (10x faster) ✅
-Database Query Time: 15ms (10x faster) ✅
+Average Response Time: 25ms (10x faster) 
+Database Query Time: 15ms (10x faster) 
 Page Load Time: 2.5 seconds (same, need Phase 2)
-Concurrent Users: 25,000 (5x more) ✅
+Concurrent Users: 25,000 (5x more) 
 ```
 
 ### **After Phase 1 + 2 (2 weeks):**
 ```
-Average Response Time: 25ms (10x faster) ✅
-Database Query Time: 15ms (10x faster) ✅
-Page Load Time: 800ms (3x faster) ✅
-Concurrent Users: 25,000 (5x more) ✅
+Average Response Time: 25ms (10x faster) 
+Database Query Time: 15ms (10x faster) 
+Page Load Time: 800ms (3x faster) 
+Concurrent Users: 25,000 (5x more) 
 ```
 
 ---
 
-## ⚡ Performance Demo Script
+## Performance Demo Script
 
 **Show judges:**
 
 1. **Before/After Comparison:**
-   ```
-   WITHOUT cache:
-   curl -w "Time: %{time_total}s\n" https://api.tramites.gov/tramites
-   → Time: 0.247s
+```
+WITHOUT cache:
+curl -w "Time: %{time_total}s\n" https://api.tramites.gov/tramites
+→ Time: 0.247s
 
-   WITH cache:
-   curl -w "Time: %{time_total}s\n" https://api.tramites.gov/tramites
-   → Time: 0.015s
+WITH cache:
+curl -w "Time: %{time_total}s\n" https://api.tramites.gov/tramites
+→ Time: 0.015s
 
-   "16x faster with Redis cache"
-   ```
+"16x faster with Redis cache"
+```
 
 2. **Load Test Results:**
-   ```
-   wrk -t12 -c400 -d30s https://api.tramites.gov
+```
+wrk -t12 -c400 -d30s https://api.tramites.gov
 
-   WITHOUT optimizations:
-   → 2,340 requests/sec, 90% < 500ms
+WITHOUT optimizations:
+→ 2,340 requests/sec, 90% < 500ms
 
-   WITH optimizations:
-   → 18,500 requests/sec, 90% < 30ms
+WITH optimizations:
+→ 18,500 requests/sec, 90% < 30ms
 
-   "8x more throughput, 16x faster response"
-   ```
+"8x more throughput, 16x faster response"
+```
 
 3. **Database Query Comparison:**
-   ```sql
-   EXPLAIN ANALYZE SELECT * FROM tramites WHERE ciudadano_id = 123;
+```sql
+EXPLAIN ANALYZE SELECT * FROM tramites WHERE ciudadano_id = 123;
 
-   Before: Seq Scan, 2,450ms
-   After:  Index Scan, 22ms (111x faster)
-   ```
+Before: Seq Scan, 2,450ms
+After: Index Scan, 22ms (111x faster)
+```
 
 ---
 
-## ✅ Summary
+## Summary
 
 **Pick your optimization level:**
 
