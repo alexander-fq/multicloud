@@ -10,6 +10,13 @@ on:
     paths:
       - 'app/backend/**'
 
+# Permisos minimos necesarios para OIDC (autenticacion sin access keys)
+# id-token: write  -> permite solicitar token OIDC de GitHub
+# contents: read   -> permite checkout del codigo
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   test:
     name: Lint, Audit & Test
@@ -34,16 +41,18 @@ jobs:
         working-directory: ./app/backend
         run: npm run lint || echo "No lint script configured"
 
-      - name: Security audit
+      - name: Security audit (bloqueante en HIGH/CRITICAL)
         working-directory: ./app/backend
-        run: npm audit --audit-level=high || true
+        # CORREGIDO: Eliminado "|| true" que neutralizaba este check
+        # Ahora falla el pipeline si hay vulnerabilidades HIGH o CRITICAL
+        run: npm audit --audit-level=high
 
       - name: Run tests
         working-directory: ./app/backend
         run: npm test || echo "No test script configured"
 
   build-and-push:
-    name: Build & Push to ECR
+    name: Build, Scan & Push to ECR
     needs: test
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging')
@@ -52,18 +61,31 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
+      # ----------------------------------------
+      # OIDC: Autenticacion sin access keys de larga duracion
+      # En lugar de guardar AWS_ACCESS_KEY_ID como secret,
+      # GitHub solicita un token temporal de AWS via OIDC.
+      # El token expira en 1 hora y no se almacena en ninguna parte.
+      # Pre-requisito: crear el OIDC provider en AWS (ver terraform/modules/security)
+      # ----------------------------------------
+      - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: us-east-1
+          # No hay access-key-id ni secret-access-key
+          # AWS emite credenciales temporales via el token OIDC de GitHub
 
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build, tag and push image
+      # ----------------------------------------
+      # BUILD primero, SCAN despues, PUSH solo si pasa el scan
+      # CORREGIDO: El orden original era build -> push -> scan
+      # Ahora: build -> scan -> push (imagen vulnerable nunca llega a ECR)
+      # ----------------------------------------
+      - name: Build Docker image
         working-directory: ./app/backend
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
@@ -72,14 +94,46 @@ jobs:
         run: |
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
           docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+      - name: Scan image for vulnerabilities ANTES de push (Trivy)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ steps.login-ecr.outputs.registry }}/govtech-backend:${{ github.sha }}
+          format: 'table'
+          # CORREGIDO: exit-code '1' significa que el pipeline FALLA si hay CRITICAL o HIGH
+          # El original usaba '0' que nunca fallaba (solo imprimia el reporte)
+          exit-code: '1'
+          severity: 'CRITICAL,HIGH'
+          # Ignorar vulnerabilidades sin fix disponible (no hay nada que hacer con ellas)
+          ignore-unfixed: true
+
+      - name: Push image to ECR (solo si el scan paso)
+        # Este paso solo corre si Trivy no encontro CRITICAL/HIGH
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: govtech-backend
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
-      - name: Scan image for vulnerabilities (Trivy)
+      # ----------------------------------------
+      # SBOM: Software Bill of Materials
+      # Lista de TODAS las dependencias de la imagen (para auditoria)
+      # Requerido por muchos marcos de compliance gubernamental
+      # ----------------------------------------
+      - name: Generate SBOM (Software Bill of Materials)
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ steps.login-ecr.outputs.registry }}/govtech-backend:latest
-          format: 'table'
-          exit-code: '0'
-          severity: 'CRITICAL,HIGH'
+          image-ref: ${{ steps.login-ecr.outputs.registry }}/govtech-backend:${{ github.sha }}
+          format: 'cyclonedx'
+          output: 'backend-sbom.json'
+          exit-code: '0'  # SBOM es informativo, no bloquea
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-sbom-${{ github.sha }}
+          path: backend-sbom.json
+          retention-days: 90  # 90 dias para auditoria y compliance
