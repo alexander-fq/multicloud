@@ -1,466 +1,268 @@
-# Resumen de Configuración IAM - GovTech
+# Resumen de Configuracion IAM - GovTech Cloud Migration Platform
 
-## Estructura Creada
+**Cuenta AWS**: 835960996869
+**Region**: us-east-1
+**Script de setup**: `setup-iam-v2.sh`
+**Principio**: Minimo privilegio con jerarquia funcional de 3 niveles
+
+---
+
+## Estructura Actual
 
 ```
-Account: 835960996869
-Region: us-east-1
-
 IAM Resources
-├── Custom Policies (9)
-│   ├── GovTech-ECR-Admin
-│   ├── GovTech-Terraform-State
-│   ├── GovTech-RDS-Admin
-│   ├── GovTech-EKS-Deploy
-│   ├── GovTech-ECR-ReadOnly
-│   ├── GovTech-Secrets-Read
-│   ├── GovTech-CICD-Access
-│   ├── GovTech-Monitoring
-│   └── GovTech-PermissionBoundary
-│
-├── Groups (3)
-│   ├── GovTech-Infrastructure
-│   │   ├── Policies:
-│   │   │   ├── AmazonEC2FullAccess (AWS Managed)
-│   │   │   ├── AmazonVPCFullAccess (AWS Managed)
-│   │   │   ├── AmazonEKSClusterPolicy (AWS Managed)
-│   │   │   ├── GovTech-ECR-Admin
-│   │   │   ├── GovTech-Terraform-State
-│   │   │   └── GovTech-RDS-Admin
-│   │   └── Members:
-│   │       └── collab-infrastructure
-│   │
-│   ├── GovTech-Deployment
-│   │   ├── Policies:
-│   │   │   ├── AmazonEKSWorkerNodePolicy (AWS Managed)
-│   │   │   ├── AmazonEKS_CNI_Policy (AWS Managed)
-│   │   │   ├── GovTech-EKS-Deploy
-│   │   │   ├── GovTech-ECR-ReadOnly
-│   │   │   └── GovTech-Secrets-Read
-│   │   └── Members:
-│   │       └── collab-deployment
-│   │
-│   └── GovTech-DevOps
-│       ├── Policies:
-│       │   ├── CloudWatchFullAccess (AWS Managed)
-│       │   ├── GovTech-CICD-Access
-│       │   └── GovTech-Monitoring
-│       └── Members:
-│           └── collab-devops
-│
-└── Users (3)
-    ├── collab-infrastructure
-    │   ├── Group: GovTech-Infrastructure
-    │   ├── Permission Boundary: GovTech-PermissionBoundary
-    │   ├── Access: Programmatic + Console
-    │   └── MFA: Pending setup
-    │
-    ├── collab-deployment
-    │   ├── Group: GovTech-Deployment
-    │   ├── Permission Boundary: GovTech-PermissionBoundary
-    │   ├── Access: Programmatic + Console
-    │   └── MFA: Pending setup
-    │
-    └── collab-devops
-        ├── Group: GovTech-DevOps
-        ├── Permission Boundary: GovTech-PermissionBoundary
-        ├── Access: Programmatic + Console
-        └── MFA: Pending setup
+|
++-- Custom Policies (13)
+|   |
+|   +-- Nivel 1 - Critico
+|   |   +-- GovTech-IAM-EKS-Roles      (crear roles para EKS)
+|   |   +-- GovTech-S3-Admin           (gestion completa S3)
+|   |   +-- GovTech-Terraform-State    (acceso a estado Terraform)
+|   |   +-- GovTech-RDS-Admin          (administracion base de datos)
+|   |
+|   +-- Nivel 2 - Operacional
+|   |   +-- GovTech-ECR-Admin          (push/pull imagenes Docker)
+|   |   +-- GovTech-ECR-ReadOnly       (solo pull imagenes)
+|   |   +-- GovTech-EKS-Deploy         (aplicar manifests Kubernetes)
+|   |   +-- GovTech-ALB-Controller     (balanceador de carga)
+|   |   +-- GovTech-AutoScaling        (escalado automatico)
+|   |   +-- GovTech-CICD-Access        (pipelines CI/CD)
+|   |
+|   +-- Nivel 3 - Solo Lectura
+|       +-- GovTech-Secrets-Read       (leer credenciales)
+|       +-- GovTech-Monitoring         (metricas y alertas)
+|       +-- GovTech-Security-Auditor   (auditoria y compliance)
+|
++-- Groups (10 grupos funcionales)
+|   |
+|   +-- NIVEL 1 CRITICO
+|   |   +-- GovTech-Network-Admin      (VPC, subnets, security groups)
+|   |   +-- GovTech-EKS-Admin          (cluster EKS, node groups)
+|   |   +-- GovTech-Database-Admin     (RDS: crear, modificar, snapshots)
+|   |   +-- GovTech-Terraform-Operator (estado Terraform, S3 admin)
+|   |
+|   +-- NIVEL 2 OPERACIONAL
+|   |   +-- GovTech-Container-Deploy   (ECR push, kubectl apply)
+|   |   +-- GovTech-ALB-Operator       (load balancer, certificados)
+|   |   +-- GovTech-CICD-Operator      (GitHub Actions OIDC, pipelines)
+|   |
+|   +-- NIVEL 3 SOLO LECTURA
+|       +-- GovTech-Secrets-ReadOnly   (leer Secrets Manager)
+|       +-- GovTech-Monitor-ReadOnly   (CloudWatch, GuardDuty)
+|       +-- GovTech-Security-Auditor   (CloudTrail, Security Hub)
+|
++-- Users
+    +-- govtech-admin
+        +-- Grupos: los 10 grupos funcionales
+        +-- Nota: operador principal con acceso completo
+        |          Los grupos estan disenados para escalar:
+        |          cada nuevo usuario se incorpora asignandolo
+        |          unicamente a los grupos de su funcion.
 ```
 
-## Matriz de Permisos
+---
 
-| Servicio | collab-infrastructure | collab-deployment | collab-devops |
-|----------|----------------------|-------------------|---------------|
-| **IAM Users** | - | - | - |
-| **IAM Roles** | Create (EKS) | - | Create (CICD) |
-| **EC2** | Full | Read-only | Read-only |
-| **VPC** | Full | - | - |
-| **EKS** | Create/Modify | kubectl access | Read-only |
-| **ECR** | Push/Pull | Pull-only | Push/Pull (CI) |
-| **RDS** | Create/Modify | - | - |
-| **S3** | Terraform state | - | Artifacts |
-| **Secrets Manager** | - | Read (dev/stg) | Full (CICD) |
-| **CloudWatch** | Logs | Logs | Full |
-| **Billing** | - | - | - |
+## Politicas por Grupo
 
-## Paso a Paso de Ejecución
+| Grupo | Politicas AWS Managed | Politicas Custom |
+|-------|-----------------------|-----------------|
+| GovTech-Network-Admin | AmazonEC2FullAccess, AmazonVPCFullAccess | - |
+| GovTech-EKS-Admin | AmazonEKSClusterPolicy | GovTech-IAM-EKS-Roles |
+| GovTech-Database-Admin | - | GovTech-RDS-Admin |
+| GovTech-Terraform-Operator | - | GovTech-Terraform-State, GovTech-S3-Admin |
+| GovTech-Container-Deploy | - | GovTech-ECR-Admin, GovTech-EKS-Deploy |
+| GovTech-ALB-Operator | - | GovTech-ALB-Controller, GovTech-AutoScaling |
+| GovTech-CICD-Operator | - | GovTech-CICD-Access, GovTech-ECR-ReadOnly |
+| GovTech-Secrets-ReadOnly | - | GovTech-Secrets-Read |
+| GovTech-Monitor-ReadOnly | CloudWatchReadOnlyAccess | GovTech-Monitoring |
+| GovTech-Security-Auditor | SecurityAudit | GovTech-Security-Auditor |
 
-### 1. Ejecutar Setup
+---
+
+## Jerarquia de Acceso
+
+La estructura sigue tres niveles de riesgo:
+
+**Nivel 1 - Critico**: un actor malicioso puede destruir infraestructura completa.
+Requiere MFA obligatorio, acceso temporal (max 8 horas), y registro inmediato en CloudTrail.
+
+**Nivel 2 - Operacional**: un actor malicioso puede comprometer la aplicacion pero no destruir infraestructura.
+Requiere MFA obligatorio, revision mensual de accesos.
+
+**Nivel 3 - Solo lectura**: un actor malicioso solo puede exfiltrar informacion, no modificar ni eliminar.
+Requiere MFA recomendado, revision trimestral.
+
+---
+
+## Ejecutar Setup
 
 ```bash
 cd aws/iam
-./setup-iam.sh
+./setup-iam-v2.sh
 ```
 
-### 2. Output Esperado
+El script realiza los siguientes pasos:
+1. Verifica credenciales AWS (STS get-caller-identity)
+2. Opcionalmente elimina grupos anteriores (GovTech-Infrastructure, GovTech-Deployment, GovTech-DevOps)
+3. Crea 13 politicas custom desde los archivos JSON en `/policies/`
+4. Crea 10 grupos funcionales
+5. Asigna politicas a cada grupo
+6. Crea el usuario `govtech-admin`
+7. Asocia `govtech-admin` a los 10 grupos
 
-```
-==========================================
-  GovTech IAM Setup Script
-  Configuración de Seguridad con Mínimo Privilegio
-==========================================
+---
 
-[INFO] Verificando configuración de AWS CLI...
-[SUCCESS] AWS CLI configurado correctamente
-[INFO] Account ID: 835960996869
-
-========== PASO 1: Crear Políticas Custom ==========
-
-[INFO] Creando política: GovTech-ECR-Admin
-[SUCCESS] Política GovTech-ECR-Admin creada
-[INFO] Creando política: GovTech-Terraform-State
-[SUCCESS] Política GovTech-Terraform-State creada
-...
-
-[SUCCESS] Políticas custom creadas
-
-========== PASO 2: Crear Grupos IAM ==========
-
-[INFO] Creando grupo: GovTech-Infrastructure
-[SUCCESS] Grupo GovTech-Infrastructure creado
-...
-
-[SUCCESS] Grupos IAM creados
-
-========== PASO 3: Adjuntar Políticas a Grupos ==========
-
-[INFO] Configurando grupo GovTech-Infrastructure...
-[INFO] Adjuntando política a grupo: GovTech-Infrastructure
-[SUCCESS] Política adjuntada a GovTech-Infrastructure
-...
-
-[SUCCESS] Políticas adjuntadas a grupos
-
-========== PASO 4: Crear Usuarios IAM ==========
-
-[INFO] Creando usuario: collab-infrastructure
-[SUCCESS] Usuario collab-infrastructure creado
-...
-
-[SUCCESS] Usuarios IAM creados
-
-========== PASO 5: Asignar Usuarios a Grupos ==========
-
-[INFO] Añadiendo collab-infrastructure al grupo GovTech-Infrastructure
-[SUCCESS] Usuario collab-infrastructure añadido a GovTech-Infrastructure
-...
-
-[SUCCESS] Usuarios asignados a grupos
-
-========== PASO 6: Aplicar Permission Boundaries ==========
-
-[INFO] Aplicando permission boundary a collab-infrastructure
-[SUCCESS] Permission boundary aplicado a collab-infrastructure
-...
-
-[SUCCESS] Permission boundaries aplicados
-
-========== PASO 7: Crear Access Keys ==========
-
-¿Deseas crear access keys para los usuarios? (y/n): y
-
-[INFO] Creando access key para collab-infrastructure
-[SUCCESS] Access key creado para collab-infrastructure
-[INFO] Credenciales guardadas en: credentials-collab-infrastructure.json
-...
-
-[WARNING] IMPORTANTE: Guarda los archivos credentials-*.json en un lugar seguro
-[WARNING] IMPORTANTE: No los compartas por canales inseguros
-
-========== PASO 8: Crear Console Login (Opcional) ==========
-
-¿Deseas crear console login para los usuarios? (y/n): y
-
-[INFO] Creando console login para collab-infrastructure
-[SUCCESS] Console login creado para collab-infrastructure
-[WARNING] Password temporal: GovTech2026!TempPass
-[INFO] El usuario debe cambiar su password en el primer login
-...
-
-==========================================
-[SUCCESS] IAM Setup Completado!
-==========================================
-
-Resumen de la configuración:
-
-Grupos creados:
-  - GovTech-Infrastructure (Colaborador A)
-  - GovTech-Deployment (Colaborador B)
-  - GovTech-DevOps (Colaborador C)
-
-Usuarios creados:
-  - collab-infrastructure
-  - collab-deployment
-  - collab-devops
-
-Políticas custom creadas: 9
-Permission boundaries aplicados: Sí
-
-Próximos pasos:
-1. Distribuir credenciales de forma segura a cada colaborador
-2. Configurar MFA para cada usuario (recomendado)
-3. Revisar CloudTrail para auditoría
-4. Ejecutar tests de permisos (ver IAM_SECURITY_POLICIES.md)
-
-Recuerda:
-- Los access keys deben rotarse cada 90 días
-- Habilitar MFA para mayor seguridad
-- Revisar permisos mensualmente
-```
-
-### 3. Archivos Generados
-
-Después de ejecutar el script:
-
-```
-aws/iam/
-├── credentials-collab-infrastructure.json
-├── credentials-collab-deployment.json
-└── credentials-collab-devops.json
-```
-
-**Formato de credentials-*.json**:
-```json
-{
-    "AccessKey": {
-        "UserName": "collab-infrastructure",
-        "AccessKeyId": "AKIAIOSFODNN7EXAMPLE",
-        "Status": "Active",
-        "SecretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
-        "CreateDate": "2026-02-12T08:15:00Z"
-    }
-}
-```
-
-### 4. Distribuir Credenciales
-
-**Para Colaborador A (Infrastructure)**:
-
-```
-Usuario: collab-infrastructure
-AWS Access Key ID: AKIA...
-AWS Secret Access Key: wJalr...
-Console URL: https://835960996869.signin.aws.amazon.com/console
-Console Password (temporal): GovTech2026!TempPass
-Region: us-east-1
-
-Permisos:
-- EC2, VPC, EKS Cluster, ECR Admin, RDS, S3 (Terraform)
-
-Configuración:
-aws configure
-[pegar Access Key ID y Secret]
-[region: us-east-1]
-```
-
-**Para Colaborador B (Deployment)**:
-
-```
-Usuario: collab-deployment
-AWS Access Key ID: AKIA...
-AWS Secret Access Key: wJalr...
-Console URL: https://835960996869.signin.aws.amazon.com/console
-Console Password (temporal): GovTech2026!TempPass
-Region: us-east-1
-
-Permisos:
-- EKS kubectl, ECR pull-only, Secrets (dev/stg), CloudWatch logs
-
-Configuración:
-aws configure
-[pegar Access Key ID y Secret]
-[region: us-east-1]
-```
-
-**Para Colaborador C (DevOps)**:
-
-```
-Usuario: collab-devops
-AWS Access Key ID: AKIA...
-AWS Secret Access Key: wJalr...
-Console URL: https://835960996869.signin.aws.amazon.com/console
-Console Password (temporal): GovTech2026!TempPass
-Region: us-east-1
-
-Permisos:
-- CloudWatch Full, ECR push (CI/CD), Secrets (CICD), S3 artifacts
-
-Configuración:
-aws configure
-[pegar Access Key ID y Secret]
-[region: us-east-1]
-```
-
-## Verificación
-
-### Verificar Grupos
+## Verificacion
 
 ```bash
-aws iam list-groups
+# Ver todos los grupos del proyecto
+aws iam list-groups \
+  --query 'Groups[?starts_with(GroupName, `GovTech`)].GroupName' \
+  --output table
+
+# Ver politicas de un grupo especifico
+aws iam list-attached-group-policies \
+  --group-name GovTech-EKS-Admin \
+  --query 'AttachedPolicies[].PolicyName' \
+  --output table
+
+# Ver grupos del usuario operador
+aws iam list-groups-for-user \
+  --user-name govtech-admin \
+  --query 'Groups[].GroupName' \
+  --output table
+
+# Contar cuantas politicas custom existen
+aws iam list-policies --scope Local \
+  --query 'Policies[?starts_with(PolicyName, `GovTech`)].PolicyName' \
+  --output table
 ```
 
-Output esperado:
-```json
-{
-    "Groups": [
-        {
-            "Path": "/",
-            "GroupName": "GovTech-Infrastructure",
-            "GroupId": "AGPAI...",
-            "Arn": "arn:aws:iam::835960996869:group/GovTech-Infrastructure",
-            "CreateDate": "2026-02-12T08:15:00Z"
-        },
-        {
-            "Path": "/",
-            "GroupName": "GovTech-Deployment",
-            ...
-        },
-        {
-            "Path": "/",
-            "GroupName": "GovTech-DevOps",
-            ...
-        }
-    ]
-}
-```
-
-### Verificar Usuarios
-
-```bash
-aws iam list-users
-```
-
-### Verificar Políticas de un Grupo
-
-```bash
-aws iam list-attached-group-policies --group-name GovTech-Infrastructure
-```
-
-Output esperado:
-```json
-{
-    "AttachedPolicies": [
-        {
-            "PolicyName": "AmazonEC2FullAccess",
-            "PolicyArn": "arn:aws:iam::aws:policy/AmazonEC2FullAccess"
-        },
-        {
-            "PolicyName": "AmazonVPCFullAccess",
-            "PolicyArn": "arn:aws:iam::aws:policy/AmazonVPCFullAccess"
-        },
-        ...
-    ]
-}
-```
-
-### Verificar Permission Boundary
-
-```bash
-aws iam get-user --user-name collab-infrastructure
-```
-
-Debe mostrar:
-```json
-{
-    "User": {
-        "UserName": "collab-infrastructure",
-        "PermissionsBoundary": {
-            "PermissionsBoundaryType": "Policy",
-            "PermissionsBoundaryArn": "arn:aws:iam::835960996869:policy/GovTech-PermissionBoundary"
-        },
-        ...
-    }
-}
-```
+---
 
 ## Tests de Seguridad
 
-### Test 1: collab-infrastructure puede crear ECR repo
+### Test 1: El usuario puede listar repositorios ECR
 
 ```bash
-aws ecr create-repository --repository-name test-govtech-repo
+aws ecr describe-repositories
+# Debe funcionar (grupo GovTech-Container-Deploy)
 ```
 
-Debe funcionar ✓
-
-### Test 2: collab-infrastructure NO puede crear usuarios
+### Test 2: El usuario puede leer secrets
 
 ```bash
-aws iam create-user --user-name hacker
+aws secretsmanager list-secrets
+# Debe funcionar (grupo GovTech-Secrets-ReadOnly)
 ```
 
-Debe fallar con AccessDenied ✓
-
-### Test 3: collab-deployment puede listar EKS
+### Test 3: El usuario puede ver logs de CloudWatch
 
 ```bash
-aws eks list-clusters
+aws logs describe-log-groups
+# Debe funcionar (grupo GovTech-Monitor-ReadOnly)
 ```
 
-Debe funcionar ✓
-
-### Test 4: collab-deployment NO puede push a ECR
+### Test 4: El usuario NO puede modificar usuarios IAM
 
 ```bash
-aws ecr put-image --repository-name test-repo --image-manifest ...
+aws iam create-user --user-name test-user
+# Debe fallar con AccessDenied (ningun grupo tiene este permiso)
 ```
 
-Debe fallar con AccessDenied ✓
-
-### Test 5: collab-devops puede crear alarmas
+### Test 5: El usuario NO puede acceder a Billing
 
 ```bash
-aws cloudwatch put-metric-alarm --alarm-name test-alarm ...
+aws ce get-cost-and-usage \
+  --time-period Start=2026-01-01,End=2026-01-31 \
+  --granularity MONTHLY \
+  --metrics BlendedCost
+# Debe fallar con AccessDenied
 ```
 
-Debe funcionar ✓
+---
 
-### Test 6: Ningún colaborador puede trabajar fuera de us-east-1
+## Onboarding de un Nuevo Usuario
+
+### Paso 1: Crear el usuario
 
 ```bash
-aws ec2 describe-instances --region us-west-2
+aws iam create-user --user-name nombre.apellido
 ```
 
-Debe fallar con AccessDenied (boundary policy) ✓
+### Paso 2: Asignar solo el grupo necesario para su funcion
+
+```bash
+# Ejemplo: un SRE solo necesita monitoreo
+aws iam add-user-to-group \
+  --user-name nombre.apellido \
+  --group-name GovTech-Monitor-ReadOnly
+
+# Si tambien necesita ver secrets para diagnostico
+aws iam add-user-to-group \
+  --user-name nombre.apellido \
+  --group-name GovTech-Secrets-ReadOnly
+```
+
+### Paso 3: Crear acceso a consola con password temporal
+
+```bash
+aws iam create-login-profile \
+  --user-name nombre.apellido \
+  --password "TempPass2026!" \
+  --password-reset-required
+```
+
+### Paso 4: Al terminar una tarea temporal, revocar acceso
+
+```bash
+# Ejemplo: acceso temporal a base de datos para mantenimiento
+aws iam remove-user-from-group \
+  --user-name nombre.apellido \
+  --group-name GovTech-Database-Admin
+```
+
+---
 
 ## Limpieza
 
-Para eliminar TODA la configuración:
+Para eliminar TODA la configuracion IAM del proyecto:
 
 ```bash
 cd aws/iam
 ./cleanup-iam.sh
-
 # Confirmar escribiendo: DELETE
 ```
 
-Esto eliminará:
-- 3 usuarios
-- 3 grupos
-- 9 políticas custom
-- Access keys
-- Archivos credentials-*.json locales
+Esto eliminara:
+- Usuario govtech-admin y sus access keys
+- Los 10 grupos funcionales
+- Las 13 politicas custom
 
-## Próximos Pasos
+---
 
-1. [✓] Ejecutar setup-iam.sh
-2. [ ] Distribuir credenciales a colaboradores
-3. [ ] Habilitar MFA para cada usuario
-4. [ ] Configurar CloudTrail (si no está ya)
-5. [ ] Ejecutar tests de permisos
-6. [ ] Documentar passwords temporales de forma segura
-7. [ ] Calendario de rotación de keys (90 días)
+## Proximos Pasos Recomendados
+
+1. [x] Ejecutar setup-iam-v2.sh y verificar 10 grupos creados
+2. [ ] Activar MFA en el usuario govtech-admin
+3. [ ] Configurar CloudTrail con alertas para grupos de Nivel 1
+4. [ ] Rotar access keys cada 90 dias (crear recordatorio)
+5. [ ] Revisar accesos activos mensualmente en CloudTrail
+6. [ ] Para equipos: asignar a cada persona solo los grupos de su funcion
+
+---
 
 ## Recursos
 
-- [README.md](README.md) - Documentación completa
-- [setup-iam.sh](setup-iam.sh) - Script de configuración
+- [README.md](README.md) - Descripcion completa de grupos y politicas
+- [IAM_HIERARCHY.md](IAM_HIERARCHY.md) - Jerarquia funcional y escenarios de equipo
+- [setup-iam-v2.sh](setup-iam-v2.sh) - Script de configuracion actual
 - [cleanup-iam.sh](cleanup-iam.sh) - Script de limpieza
-- [../../docs/IAM_SECURITY_POLICIES.md](../../docs/IAM_SECURITY_POLICIES.md) - Documento de diseño
+- [../../docs/IAM_SECURITY_POLICIES.md](../../docs/IAM_SECURITY_POLICIES.md) - Politicas detalladas en JSON
 
 ---
 
 **Creado**: 2026-02-12
-**Versión**: 1.0.0
-**Estado**: Listo para ejecutar
+**Actualizado**: 2026-02-23
+**Version**: 2.0.0
+**Estado**: Configuracion activa en cuenta 835960996869

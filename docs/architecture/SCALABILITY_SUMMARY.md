@@ -4,7 +4,7 @@
 
 > **"Can our architecture handle a small government (1M citizens) AND scale to a large government (100M citizens)?"**
 
-**Answer: YES** ✅
+**Answer: YES** 
 
 ---
 
@@ -12,28 +12,28 @@
 
 | Government | Citizens | Daily Transactions | Our Architecture |
 |------------|----------|-------------------|------------------|
-| **Estonia** | 1.3M | 200K/day | ✅ Works out-of-box |
-| **Colombia** | 50M | 2M/day | ✅ Add replicas (2 weeks) |
-| **UK** | 67M | 8M/day | ✅ Add sharding (2 months) |
-| **India** | 1.4B | 15M/day | ✅ Multi-region (6 months) |
+| **Estonia** | 1.3M | 200K/day | Works out-of-box |
+| **Colombia** | 50M | 2M/day | Add replicas (2 weeks) |
+| **UK** | 67M | 8M/day | Add sharding (2 months) |
+| **India** | 1.4B | 15M/day | Multi-region (6 months) |
 
 ---
 
 ## Scaling Path
 
 ```
-Small Gov (1-2M)          Medium Gov (2-20M)        Large Gov (20M+)
-┌─────────────┐          ┌──────────────────┐      ┌─────────────────┐
-│ Current     │   +2wks  │ + Read Replicas  │ +2mo │ + Sharding      │
-│ Architecture│  ────►   │ + Redis Cache    │ ───► │ + Multi-region  │
-│             │          │ + HPA (2-20 pods)│      │ + Aurora        │
-└─────────────┘          └──────────────────┘      └─────────────────┘
-   $1K/month                 $5K/month                 $30K/month
+Small Gov (1-2M) Medium Gov (2-20M) Large Gov (20M+)
 
-   Compare to traditional vendors:
-   $500K/year               $5M/year                  $50M/year
+Current +2wks + Read Replicas +2mo + Sharding 
+Architecture + Redis Cache + Multi-region 
++ HPA (2-20 pods) + Aurora 
 
-   Savings: 98%             Savings: 97%              Savings: 96%
+$1K/month $5K/month $30K/month
+
+Compare to traditional vendors:
+$500K/year $5M/year $50M/year
+
+Savings: 98% Savings: 97% Savings: 96%
 ```
 
 ---
@@ -42,7 +42,7 @@ Small Gov (1-2M)          Medium Gov (2-20M)        Large Gov (20M+)
 
 | Traditional Vendor | Our Solution |
 |-------------------|--------------|
-| 2-5 YEARS 🐢 | 2-12 WEEKS ⚡ |
+| 2-5 YEARS | 2-12 WEEKS |
 | Rewrite everything | Keep code, change infrastructure |
 | Vendor lock-in | Multi-cloud ready |
 | Monolithic | Containerized |
@@ -59,9 +59,9 @@ Small Gov (1-2M)          Medium Gov (2-20M)        Large Gov (20M+)
 
 ```yaml
 # Change cloud provider in 1 line:
-provider = "aws"      # Week 1: Deploy on AWS
-provider = "oci"      # Week 3: Migrate to OCI
-provider = "gcp"      # Week 5: Migrate to GCP
+provider = "aws" # Week 1: Deploy on AWS
+provider = "oci" # Week 3: Migrate to OCI
+provider = "gcp" # Week 5: Migrate to GCP
 
 # Same code, same containers, same database
 # Just different infrastructure
@@ -99,12 +99,12 @@ Migration: 2-3 months
 - "Here's a working demo for 1,000 users"
 
 **We will show:**
-- ✅ Working demo for 1M users
-- ✅ Documentation proving it scales to 100M users
-- ✅ Real data from Estonia, Colombia, UK, India
-- ✅ Migration plan: 2 weeks to 3 months (not 2-5 years)
-- ✅ Cost savings: 96-98%
-- ✅ Multi-cloud ready (not vendor lock-in)
+- Working demo for 1M users
+- Documentation proving it scales to 100M users
+- Real data from Estonia, Colombia, UK, India
+- Migration plan: 2 weeks to 3 months (not 2-5 years)
+- Cost savings: 96-98%
+- Multi-cloud ready (not vendor lock-in)
 
 **We're not just building software. We're building a migration strategy.**
 
@@ -144,9 +144,9 @@ Migration: 2-3 months
 **Question:** "Is your architecture portable and scalable?"
 
 **Answer:**
-1. **Portable** ✅ - Works on AWS, GCP, Azure, OCI, on-premise (Terraform + Kubernetes)
-2. **Scalable** ✅ - Handles 1M to 100M+ citizens (documented scaling path)
-3. **Fast Migration** ✅ - 2 weeks to 3 months (not 2-5 years)
-4. **Cost Effective** ✅ - 96-98% cheaper than traditional vendors
+1. **Portable** - Works on AWS, GCP, Azure, OCI, on-premise (Terraform + Kubernetes)
+2. **Scalable** - Handles 1M to 100M+ citizens (documented scaling path)
+3. **Fast Migration** - 2 weeks to 3 months (not 2-5 years)
+4. **Cost Effective** - 96-98% cheaper than traditional vendors
 
 **This is not a demo. This is a product governments can actually use.**

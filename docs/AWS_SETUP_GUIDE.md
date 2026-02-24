@@ -22,11 +22,11 @@ NUNCA uses la cuenta root de AWS para trabajo diario. Esta guía te ayuda a crea
 User name: govtech-admin
 
 Access type:
-✅ Programmatic access (AWS CLI, Terraform, kubectl)
-✅ AWS Management Console access (Acceso web)
+Programmatic access (AWS CLI, Terraform, kubectl)
+AWS Management Console access (Acceso web)
 
 Console password: [Tu password seguro]
-✅ Require password reset
+Require password reset
 ```
 
 ---
@@ -66,7 +66,7 @@ Después de crear el usuario verás:
 Access key ID: AKIAIOSFODNN7EXAMPLE
 Secret access key: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
 
-⚠️ GUARDA ESTAS CREDENCIALES AHORA ⚠️
+GUARDA ESTAS CREDENCIALES AHORA 
 ```
 
 **Download .csv** y guárdalo en lugar seguro.
@@ -152,9 +152,9 @@ aws sts get-caller-identity
 
 # Output esperado:
 {
-    "UserId": "AIDAI23EXAMPLE",
-    "Account": "123456789012",
-    "Arn": "arn:aws:iam::123456789012:user/govtech-admin"
+"UserId": "AIDAI23EXAMPLE",
+"Account": "123456789012",
+"Arn": "arn:aws:iam::123456789012:user/govtech-admin"
 }
 
 # Listar regiones disponibles
@@ -185,7 +185,7 @@ export AWS_PROFILE=proyecto2
 
 ## Buenas Prácticas de Seguridad
 
-### ✅ HACER:
+### HACER:
 - Usar IAM User para trabajo diario
 - Habilitar MFA en root account
 - Habilitar MFA en IAM users
@@ -194,7 +194,7 @@ export AWS_PROFILE=proyecto2
 - Usar IAM Roles en EC2/EKS en vez de hardcodear keys
 - Guardar credenciales en AWS Secrets Manager (no en código)
 
-### ❌ NO HACER:
+### NO HACER:
 - Usar root account para trabajo diario
 - Compartir credenciales
 - Commitear access keys a Git
@@ -232,9 +232,9 @@ aws configure set region us-east-1
 ## Siguiente Paso
 
 Una vez configurado:
-1. ✅ IAM User creado con permisos
-2. ✅ AWS CLI configurado
-3. ✅ Credenciales funcionando
+1. IAM User creado con permisos
+2. AWS CLI configurado
+3. Credenciales funcionando
 
 **Ahora puedes crear:**
 - ECR repositories (para Docker images)

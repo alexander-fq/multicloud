@@ -26,16 +26,16 @@
 
 ```
 Year 1: 100K citizens × 2 trámites/year = 200K records
-        @ 5KB per trámite = ~1GB + metadata = 1.5GB
+@ 5KB per trámite = ~1GB + metadata = 1.5GB
 
 Year 3: 1M citizens × 5 trámites/year = 5M records
-        @ 5KB per trámite = ~25GB + metadata = 35GB
+@ 5KB per trámite = ~25GB + metadata = 35GB
 
 Year 5: 5M citizens × 8 trámites/year = 40M records
-        @ 5KB per trámite = ~200GB + metadata = 300GB
+@ 5KB per trámite = ~200GB + metadata = 300GB
 
 Year 10: 10M citizens × 15 trámites/year = 150M records
-         @ 5KB per trámite = ~750GB + metadata = 1.2TB
+@ 5KB per trámite = ~750GB + metadata = 1.2TB
 ```
 
 **Reality check:** Colombia's GOV.CO started with 5TB after consolidating 1,000+ existing services from multiple entities.
@@ -47,30 +47,30 @@ Year 10: 10M citizens × 15 trámites/year = 150M records
 ### Our Architecture (From [01-architecture-overview.md](01-architecture-overview.md))
 
 ```
-┌────────────────────────────────────────────────────────────┐
-│ COMPONENT              │ CURRENT CAPACITY │ BOTTLENECK?   │
-├────────────────────────────────────────────────────────────┤
-│ ALB                    │ ~500K req/day    │ No (auto-scale)│
-│ EKS Pods (2 replicas)  │ ~200K req/day    │ YES - CPU/RAM  │
-│ RDS PostgreSQL         │ ~500GB optimal   │ YES - Storage  │
-│ NAT Gateway            │ ~1M connections  │ No             │
-│ VPC (10.0.0.0/16)      │ 65,536 IPs       │ No             │
-└────────────────────────────────────────────────────────────┘
+
+COMPONENT CURRENT CAPACITY BOTTLENECK? 
+
+ALB ~500K req/day No (auto-scale)
+EKS Pods (2 replicas) ~200K req/day YES - CPU/RAM 
+RDS PostgreSQL ~500GB optimal YES - Storage 
+NAT Gateway ~1M connections No 
+VPC (10.0.0.0/16) 65,536 IPs No 
+
 ```
 
 ### Performance Thresholds
 
 **Current Setup Can Handle:**
-- ✅ **Population:** Up to 5M citizens
-- ✅ **Daily Transactions:** Up to 200K per day (2.3 requests/second average, 20 req/s peak)
-- ✅ **Database Size:** Up to 500GB (optimal for single RDS instance)
-- ✅ **Concurrent Users:** ~5,000 simultaneous connections
+- **Population:** Up to 5M citizens
+- **Daily Transactions:** Up to 200K per day (2.3 requests/second average, 20 req/s peak)
+- **Database Size:** Up to 500GB (optimal for single RDS instance)
+- **Concurrent Users:** ~5,000 simultaneous connections
 
 **Bottlenecks Will Appear At:**
-- ⚠️ **10M+ citizens:** RDS will need read replicas
-- ⚠️ **500K+ daily transactions:** EKS pods need horizontal scaling (HPA)
-- ⚠️ **1TB+ database:** Need to implement partitioning or sharding
-- ⚠️ **50M+ citizens:** Need multi-region architecture
+- **10M+ citizens:** RDS will need read replicas
+- **500K+ daily transactions:** EKS pods need horizontal scaling (HPA)
+- **1TB+ database:** Need to implement partitioning or sharding
+- **50M+ citizens:** Need multi-region architecture
 
 ---
 
@@ -79,7 +79,7 @@ Year 10: 10M citizens × 15 trámites/year = 150M records
 ### **Tier 1: Small Government (< 2M citizens)**
 **Example:** Panama (~4M), Costa Rica (~5M), Uruguay (~3.5M)
 
-**Current Architecture:** ✅ **NO CHANGES NEEDED**
+**Current Architecture:** **NO CHANGES NEEDED**
 
 ```
 Migration Time: 2-3 weeks
@@ -98,7 +98,7 @@ Infrastructure Cost: $800-1,500/month AWS
 ### **Tier 2: Medium Government (2M-20M citizens)**
 **Example:** Ecuador (~18M), Chile (~19M), Peru (~33M)
 
-**Architecture Changes:** ⚠️ **MODERATE SCALING NEEDED**
+**Architecture Changes:** **MODERATE SCALING NEEDED**
 
 ```
 Migration Time: 4-6 weeks
@@ -124,27 +124,27 @@ Replica 3: Read operations - Public portal
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: backend-hpa
+name: backend-hpa
 spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: backend
-  minReplicas: 2
-  maxReplicas: 20  # Scale up to 20 pods during peak
-  metrics:
-  - type: Resource
-    resource:
-      name: cpu
-      target:
-        type: Utilization
-        averageUtilization: 70
+scaleTargetRef:
+apiVersion: apps/v1
+kind: Deployment
+name: backend
+minReplicas: 2
+maxReplicas: 20 # Scale up to 20 pods during peak
+metrics:
+- type: Resource
+resource:
+name: cpu
+target:
+type: Utilization
+averageUtilization: 70
 ```
 
 3. **Add Redis Cache** (reduce database load)
 ```
 Before: Every query hits PostgreSQL → 1000 req/s = 1000 DB queries
-After:  80% cached in Redis → 1000 req/s = 200 DB queries + 800 Redis
+After: 80% cached in Redis → 1000 req/s = 200 DB queries + 800 Redis
 
 Redis handles 100K+ req/s easily
 PostgreSQL load reduced by 80%
@@ -159,30 +159,30 @@ Result: 60-70% reduction in backend load
 
 **Architecture Diagram for Tier 2:**
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    CloudFront CDN (Edge)                    │
-│         (Handles 70% of requests - static content)          │
-└──────────────────────────┬──────────────────────────────────┘
-                           │
-                           ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    ALB (Dynamic traffic)                    │
-└──────────────────────────┬──────────────────────────────────┘
-                           │
-                           ▼
-┌─────────────────────────────────────────────────────────────┐
-│              EKS Cluster (HPA: 2-20 pods)                   │
-│  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐        │
-│  │Backend 1│  │Backend 2│  │Backend N│  │ Redis   │        │
-│  └────┬────┘  └────┬────┘  └────┬────┘  └────┬────┘        │
-└───────┼───────────┼────────────┼────────────┼──────────────┘
-        │           │            │            │
-        │           │            │            │ (80% cache hit)
-        ▼           ▼            ▼            ▼
-┌─────────────────────────────────────────────────────────────┐
-│  RDS Primary (Writes)  →  Replica 1  →  Replica 2           │
-│  20% of queries            40% reads    40% reads           │
-└─────────────────────────────────────────────────────────────┘
+
+CloudFront CDN (Edge) 
+(Handles 70% of requests - static content) 
+
+
+
+
+ALB (Dynamic traffic) 
+
+
+
+
+EKS Cluster (HPA: 2-20 pods) 
+
+Backend 1 Backend 2 Backend N Redis 
+
+
+
+(80% cache hit)
+
+
+RDS Primary (Writes) → Replica 1 → Replica 2 
+20% of queries 40% reads 40% reads 
+
 ```
 
 ---
@@ -190,7 +190,7 @@ Result: 60-70% reduction in backend load
 ### **Tier 3: Large Government (20M-100M citizens)**
 **Example:** Colombia (~50M), Spain (~47M), South Korea (~52M)
 
-**Architecture Changes:** 🚨 **SIGNIFICANT SCALING REQUIRED**
+**Architecture Changes:** **SIGNIFICANT SCALING REQUIRED**
 
 ```
 Migration Time: 8-12 weeks
@@ -241,7 +241,7 @@ DynamoDB: Sessions, audit logs, real-time status
 PostgreSQL: Transactional data (trámites, users)
 
 Why? DynamoDB handles 20M+ requests/second
-       PostgreSQL handles complex queries/transactions
+PostgreSQL handles complex queries/transactions
 ```
 
 ---
@@ -249,7 +249,7 @@ Why? DynamoDB handles 20M+ requests/second
 ### **Tier 4: Massive Government (100M+ citizens)**
 **Example:** Brazil (~215M), Mexico (~130M), India (~1.4B)
 
-**Architecture Changes:** 🔥 **ENTERPRISE-SCALE ARCHITECTURE**
+**Architecture Changes:** **ENTERPRISE-SCALE ARCHITECTURE**
 
 ```
 Migration Time: 6-12 months (phased rollout)
@@ -261,49 +261,49 @@ Infrastructure Cost: $100,000-500,000+/month
 **Required Architecture:**
 
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│                    Route 53 Global DNS                           │
-│         (Geolocation + Latency-based routing)                    │
-└────────────────┬─────────────────────────────────────────────────┘
-                 │
-      ┌──────────┼──────────┐
-      │          │          │
-      ▼          ▼          ▼
-┌─────────┐ ┌─────────┐ ┌─────────┐
-│ Region 1│ │ Region 2│ │ Region 3│  (Multi-region active-active)
-│ US-EAST │ │ SA-EAST │ │ EU-WEST │
-└────┬────┘ └────┬────┘ └────┬────┘
-     │           │           │
-     │    Global Table Replication (DynamoDB)
-     │           │           │
-     ▼           ▼           ▼
-┌──────────────────────────────────┐
-│  Per Region Architecture:        │
-│                                  │
-│  CloudFront → ALB → EKS (50-100 pods) │
-│                 ↓                │
-│  ElastiCache Redis Cluster       │
-│                 ↓                │
-│  Aurora PostgreSQL (Serverless)  │
-│  - Auto-scaling read replicas    │
-│  - 10-50 replicas per region     │
-│                 ↓                │
-│  S3 (10M+ documents)             │
-└──────────────────────────────────┘
+
+Route 53 Global DNS 
+(Geolocation + Latency-based routing) 
+
+
+
+
+
+
+Region 1 Region 2 Region 3 (Multi-region active-active)
+US-EAST SA-EAST EU-WEST 
+
+
+Global Table Replication (DynamoDB)
+
+
+
+Per Region Architecture: 
+
+CloudFront → ALB → EKS (50-100 pods) 
+↓ 
+ElastiCache Redis Cluster 
+↓ 
+Aurora PostgreSQL (Serverless) 
+- Auto-scaling read replicas 
+- 10-50 replicas per region 
+↓ 
+S3 (10M+ documents) 
+
 ```
 
 **Key Technologies:**
 
 1. **Aurora Serverless v2** (instead of RDS)
-   - Auto-scales from 0.5 ACU to 128 ACU
-   - Up to 15 read replicas per region
-   - Global database for cross-region replication
+- Auto-scales from 0.5 ACU to 128 ACU
+- Up to 15 read replicas per region
+- Global database for cross-region replication
 
 2. **Data Lake Architecture** (analytics/reporting)
 ```
 Operational Data (Aurora) → AWS Glue ETL → S3 Data Lake → Athena/Redshift
-                                                          ↓
-                                                    QuickSight Dashboards
+↓
+QuickSight Dashboards
 ```
 
 3. **Event-Driven Architecture** (handle spikes)
@@ -317,7 +317,7 @@ API Gateway → Lambda (auto-scale to 1000s) → SQS Queue → ECS Workers
 
 ### Why Governments Struggle with Migration
 
-**Traditional Government IT Migration:** 2-5 YEARS 🐢
+**Traditional Government IT Migration:** 2-5 YEARS 
 
 Problems:
 - Monolithic legacy systems (COBOL, mainframes)
@@ -327,7 +327,7 @@ Problems:
 - Fear of data loss
 - Training requirements
 
-**Our Approach:** 2-12 WEEKS ⚡
+**Our Approach:** 2-12 WEEKS 
 
 ---
 
@@ -337,14 +337,14 @@ Problems:
 
 ```yaml
 Day 1-2: Data audit
-  - Count total records in legacy system
-  - Identify data formats (SQL, Excel, PDF, paper)
-  - Map to our schema (ciudadano, tramite, estado)
+- Count total records in legacy system
+- Identify data formats (SQL, Excel, PDF, paper)
+- Map to our schema (ciudadano, tramite, estado)
 
 Day 3-4: API integration test
-  - Test 1,000 sample records
-  - Validate data mapping
-  - Performance benchmark
+- Test 1,000 sample records
+- Validate data mapping
+- Performance benchmark
 
 Day 5: Go/No-Go decision
 ```
@@ -352,12 +352,12 @@ Day 5: Go/No-Go decision
 #### **Phase 2: Parallel Run (Week 2-3)**
 
 ```
-Legacy System              Our Cloud System
-     │                          │
-     │─────── Write ────────────┤  (Dual-write)
-     │                          │
-     │                          │  (Async replication)
-     └────── Read ──────────────┘  (Validate consistency)
+Legacy System Our Cloud System
+
+Write (Dual-write)
+
+(Async replication)
+Read (Validate consistency)
 
 Citizens still use legacy system
 Data flows to both systems
@@ -368,13 +368,13 @@ Zero downtime
 
 ```
 Week 3: 10% of users → New system (pilot group)
-        90% of users → Legacy system
+90% of users → Legacy system
 
 Week 4: 50% of users → New system
-        50% of users → Legacy system
+50% of users → Legacy system
 
 Week 5: 100% of users → New system
-        Legacy system → Read-only backup
+Legacy system → Read-only backup
 ```
 
 #### **Phase 4: Legacy Decommission (Week 6+)**
@@ -394,19 +394,19 @@ Year 1: Fully retire legacy infrastructure
 ```hcl
 # terraform/variables.tf
 variable "cloud_provider" {
-  type = string
-  default = "aws"
-  # Can change to: "gcp", "azure", "oci"
+type = string
+default = "aws"
+# Can change to: "gcp", "azure", "oci"
 }
 
 # Terraform modules automatically map:
 module "database" {
-  source = "./modules/database"
+source = "./modules/database"
 
-  # AWS → RDS PostgreSQL
-  # GCP → Cloud SQL PostgreSQL
-  # Azure → Azure Database for PostgreSQL
-  # OCI → OCI Database Service
+# AWS → RDS PostgreSQL
+# GCP → Cloud SQL PostgreSQL
+# Azure → Azure Database for PostgreSQL
+# OCI → OCI Database Service
 }
 ```
 
@@ -438,11 +438,11 @@ module "database" {
 ```sql
 -- Our database uses standard PostgreSQL 14
 -- Works on:
-CREATE DATABASE tramites;  -- ✅ AWS RDS
-CREATE DATABASE tramites;  -- ✅ Google Cloud SQL
-CREATE DATABASE tramites;  -- ✅ Azure Database
-CREATE DATABASE tramites;  -- ✅ OCI Database
-CREATE DATABASE tramites;  -- ✅ On-premise PostgreSQL
+CREATE DATABASE tramites; -- AWS RDS
+CREATE DATABASE tramites; -- Google Cloud SQL
+CREATE DATABASE tramites; -- Azure Database
+CREATE DATABASE tramites; -- OCI Database
+CREATE DATABASE tramites; -- On-premise PostgreSQL
 ```
 
 **Database dump → Restore on any platform = 2 hours**
@@ -453,14 +453,14 @@ CREATE DATABASE tramites;  -- ✅ On-premise PostgreSQL
 
 ```
 Legacy System (Vendor Lock-in)
-├── Business logic tied to vendor database
-├── Proprietary APIs
-└── Migration = Rewrite everything
+Business logic tied to vendor database
+Proprietary APIs
+Migration = Rewrite everything
 
 Our System (Vendor Agnostic)
-├── Business logic in Docker containers
-├── Standard REST APIs
-└── Migration = Change infrastructure, keep code
+Business logic in Docker containers
+Standard REST APIs
+Migration = Change infrastructure, keep code
 ```
 
 ---
@@ -477,11 +477,11 @@ Example:
 Year 1: Deploy on AWS
 Year 2: Government mandate requires national cloud (OCI)
 Year 3: Run Terraform with provider = "oci"
-        → Infrastructure recreated on OCI
-        → Database migrated via pg_dump
-        → Kubernetes manifests redeployed
-        → DNS updated
-        → Done in 2 weeks
+→ Infrastructure recreated on OCI
+→ Database migrated via pg_dump
+→ Kubernetes manifests redeployed
+→ DNS updated
+→ Done in 2 weeks
 ```
 
 ### **Hybrid Cloud** (Secondary Capability)
@@ -491,12 +491,12 @@ Use case: Government has existing data centers they can't abandon
 Architecture: VPN/Direct Connect between cloud VPC and on-premise network
 
 Example:
-AWS Cloud               On-Premise Data Center
-┌──────────┐            ┌──────────────┐
-│ Frontend │            │ Legacy       │
-│ Backend  │←── VPN ───→│ Mainframe    │
-│ Cache    │            │ (COBOL, etc) │
-└──────────┘            └──────────────┘
+AWS Cloud On-Premise Data Center
+
+Frontend Legacy 
+Backend ← VPN → Mainframe 
+Cache (COBOL, etc) 
+
 
 New trámites → Cloud system
 Legacy data → Still on-premise, accessed via API
@@ -590,28 +590,28 @@ Savings: $9.6M/year (96% reduction)
 
 ## Conclusion: Why Our Architecture is Migration-Ready
 
-### **Speed** ⚡
+### **Speed** 
 - Terraform: Infrastructure in 30 minutes
 - Docker: Application in 10 minutes
 - Kubernetes: Scale in seconds
 
-### **Portability** 🔄
+### **Portability** 
 - Standard PostgreSQL: Works everywhere
 - Kubernetes: Cloud-agnostic
 - No vendor lock-in
 
-### **Scalability** 📈
+### **Scalability** 
 - Small government: Works out-of-the-box
 - Medium government: Add replicas + cache (2 weeks)
 - Large government: Add sharding + multi-region (2 months)
 - Massive government: Enterprise architecture (6-12 months)
 
-### **Cost** 💰
+### **Cost** 
 - 96-98% cheaper than traditional vendors
 - Pay-as-you-grow model
 - No upfront licensing fees
 
-### **Risk** 🛡️
+### **Risk** 
 - Gradual migration (parallel run)
 - Rollback capability at every phase
 - Zero-downtime cutover
@@ -628,11 +628,11 @@ Savings: $9.6M/year (96% reduction)
 3. **Documentation** (This file shows how to scale to 100M+)
 
 **Judges will see:**
-- ✅ Working system for small government
-- ✅ Clear path to scale to any size
-- ✅ Real data from Estonia, Colombia, Singapore
-- ✅ Cost savings: 96-98%
-- ✅ Migration time: 2 weeks to 3 months (vs. 2-5 years traditional)
+- Working system for small government
+- Clear path to scale to any size
+- Real data from Estonia, Colombia, Singapore
+- Cost savings: 96-98%
+- Migration time: 2 weeks to 3 months (vs. 2-5 years traditional)
 
 **Competitive Advantage:**
 Most teams will build a demo. We're building a **migration strategy** that governments can actually use.
