@@ -8,9 +8,7 @@ const { errorHandler } = require('./middleware/errorHandler');
 const { corsOptions, helmetOptions, apiLimiter } = require('./middleware/security');
 const { requestLogger } = require('./middleware/requestLogger');
 
-const healthRoutes         = require('./routes/health');
-const demoRoutes           = require('./routes/demo.routes');
-const demoTransformRoutes  = require('./routes/demo-transform.routes');
+const healthRoutes = require('./routes/health');
 
 const app = express();
 
@@ -34,20 +32,18 @@ app.use(requestLogger);
 app.use('/api/', apiLimiter);
 
 // Routes
-app.use('/api/health',          healthRoutes);
-app.use('/api/demo',            demoRoutes);
-app.use('/api/demo/transform',  demoTransformRoutes);
+app.use('/api/health', healthRoutes);
 
 // Root
 app.get('/', (req, res) => {
   res.json({
     name: 'GovTech Cloud Migration Platform',
-    version: '2.0.0',
-    description: 'Multi-cloud migration platform - demo backend',
+    version: '3.0.0',
+    description: 'Multi-cloud infrastructure platform',
     endpoints: {
-      health:   '/api/health',
-      demo:     '/api/demo',
-      transform: '/api/demo/transform',
+      health:         'GET  /api/health',
+      healthDatabase: 'GET  /api/health/database',
+      healthCloud:    'GET  /api/health/cloud',
     },
   });
 });
@@ -61,12 +57,6 @@ app.use((req, res) => {
       'GET  /api/health',
       'GET  /api/health/database',
       'GET  /api/health/cloud',
-      'POST /api/demo/migrate/aws',
-      'POST /api/demo/migrate/oci',
-      'POST /api/demo/migrate/gcp',
-      'POST /api/demo/migrate/azure',
-      'POST /api/demo/compare',
-      'POST /api/demo/transform',
     ],
   });
 });

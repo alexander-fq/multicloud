@@ -24,8 +24,8 @@ services:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
       timeout: 5s
-      retries: 5
-      start_period: 10s
+      retries: 10
+      start_period: 60s
 
   # Backend Node.js/Express
   backend:
@@ -42,13 +42,14 @@ services:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/govtech_dev
       CLOUD_PROVIDER: aws
       AWS_REGION: us-east-1
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      # En desarrollo local se usan valores placeholder (la demo no hace llamadas reales a AWS)
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-demo-access-key-local-dev}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-demo-secret-key-local-dev-only}
       AWS_BUCKET: ${AWS_BUCKET:-govtech-documents}
-      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-production}
+      # JWT_SECRET necesita minimo 32 caracteres (validacion Joi)
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-production-32c}
     depends_on:
-      postgres:
-        condition: service_healthy
+      - postgres
     networks:
       - govtech-network
     volumes:

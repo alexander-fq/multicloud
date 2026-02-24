@@ -1,6 +1,7 @@
 // Importacion de archivos Markdown del proyecto con Vite ?raw
 import archDiagrams    from '../../../../docs/architecture/ARCHITECTURE_DIAGRAMS.md?raw'
 import archOpts        from '../../../../docs/architecture/ARCHITECTURE_OPTIMIZATIONS.md?raw'
+import multiCloud      from '../../../../docs/architecture/MULTI_CLOUD_SERVICES.md?raw'
 import deployGuide     from '../../../../docs/deployment/DEPLOYMENT_GUIDE.md?raw'
 import rollbackGuide   from '../../../../docs/deployment/ROLLBACK_GUIDE.md?raw'
 import iamPolicies     from '../../../../docs/IAM_SECURITY_POLICIES.md?raw'
@@ -31,6 +32,13 @@ export const DOCS_TREE = [
         content: archOpts,
         description: 'Analisis de optimizaciones de performance y costos en la plataforma',
         tags: ['performance', 'cost', 'optimization', 'scalability'],
+      },
+      {
+        id: 'multi-cloud-services',
+        title: 'Servicios Multi-Cloud',
+        content: multiCloud,
+        description: 'Mapa de servicios equivalentes en AWS, OCI, GCP y Azure. Proceso de migracion entre proveedores.',
+        tags: ['multicloud', 'oci', 'gcp', 'azure', 'aws', 'migration', 'services', 'portability'],
       },
     ],
   },

@@ -2,9 +2,7 @@ import { Routes, Route } from 'react-router-dom'
 import Navbar from './components/Navbar'
 import HomePage from './pages/HomePage'
 import ArchitecturePage from './pages/ArchitecturePage'
-import MigrationPage from './pages/MigrationPage'
 import HealthPage from './pages/HealthPage'
-import DemoMigration from './pages/DemoMigration'
 import DocsPage from './pages/DocsPage'
 
 function App() {
@@ -15,9 +13,7 @@ function App() {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/architecture" element={<ArchitecturePage />} />
-          <Route path="/migration" element={<MigrationPage />} />
           <Route path="/health" element={<HealthPage />} />
-          <Route path="/demo" element={<DemoMigration />} />
           <Route path="/docs" element={<DocsPage />} />
           <Route path="/docs/:docId" element={<DocsPage />} />
         </Routes>
