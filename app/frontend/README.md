@@ -136,25 +136,25 @@ npm run build
 
 ```
 frontend/
-├── src/
-│   ├── components/
-│   │   └── Navbar.jsx          # Navigation bar
-│   ├── pages/
-│   │   ├── HomePage.jsx         # Landing page
-│   │   ├── ArchitecturePage.jsx # Architecture details
-│   │   ├── MigrationPage.jsx    # Migration tools
-│   │   └── HealthPage.jsx       # Health monitoring
-│   ├── services/
-│   │   └── api.js               # API client
-│   ├── App.jsx                  # Main app component
-│   ├── main.jsx                 # Entry point
-│   └── index.css                # Global styles
-├── public/
-├── index.html
-├── vite.config.js
-├── tailwind.config.js
-├── package.json
-└── README.md
+src/
+components/
+Navbar.jsx # Navigation bar
+pages/
+HomePage.jsx # Landing page
+ArchitecturePage.jsx # Architecture details
+MigrationPage.jsx # Migration tools
+HealthPage.jsx # Health monitoring
+services/
+api.js # API client
+App.jsx # Main app component
+main.jsx # Entry point
+index.css # Global styles
+public/
+index.html
+vite.config.js
+tailwind.config.js
+package.json
+README.md
 ```
 
 ## Features Showcase
@@ -198,12 +198,12 @@ This frontend is ready for live demo:
 
 ## Hackathon Highlights
 
-- ✅ Clean, modern UI
-- ✅ Real API integration
-- ✅ Live data display
-- ✅ Interactive migration tools
-- ✅ Professional design
-- ✅ Responsive layout
-- ✅ Production-ready code
+- Clean, modern UI
+- Real API integration
+- Live data display
+- Interactive migration tools
+- Professional design
+- Responsive layout
+- Production-ready code
 
-Built for the hackathon. Ready to impress. 🚀
+Built for the hackathon. Ready to impress. 

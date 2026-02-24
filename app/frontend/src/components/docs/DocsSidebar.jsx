@@ -126,10 +126,10 @@ export default function DocsSidebar({ activeDocId, onSelectDoc, onSearch }) {
             {/* Section header */}
             <button
               onClick={() => toggleSection(section.id)}
-              className="w-full flex items-center justify-between px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider hover:text-gray-700 hover:bg-gray-100 rounded-md mx-1 transition-colors"
+              className="w-full flex items-start justify-between px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider hover:text-gray-700 hover:bg-gray-100 rounded-md mx-1 transition-colors text-left"
             >
-              <div className="flex items-center gap-2">
-                <span className="text-gray-400">{ICONS[section.icon]}</span>
+              <div className="flex items-start gap-2 leading-tight">
+                <span className="text-gray-400 flex-shrink-0 mt-0.5">{ICONS[section.icon]}</span>
                 {section.title}
               </div>
               <svg

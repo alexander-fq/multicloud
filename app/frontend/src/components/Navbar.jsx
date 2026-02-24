@@ -6,12 +6,10 @@ function Navbar() {
   const isActive = (path) => location.pathname === path
 
   const navLinks = [
-    { path: '/', label: 'Home' },
-    { path: '/architecture', label: 'Architecture' },
-    { path: '/migration', label: 'Migration' },
-    { path: '/demo', label: 'Demo' },
-    { path: '/health', label: 'Health' },
-    { path: '/docs', label: 'Docs' },
+    { path: '/', label: 'Inicio' },
+    { path: '/architecture', label: 'Arquitectura' },
+    { path: '/health', label: 'Monitoreo' },
+    { path: '/docs', label: 'Documentacion' },
   ]
 
   return (
@@ -26,7 +24,7 @@ function Navbar() {
             </div>
             <div>
               <h1 className="text-xl font-bold text-gray-900">GovTech Cloud</h1>
-              <p className="text-xs text-gray-500">Migration Platform</p>
+              <p className="text-xs text-gray-500">Plataforma Cloud</p>
             </div>
           </Link>
 

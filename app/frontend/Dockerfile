@@ -3,7 +3,7 @@
 # porque docsData.js importa archivos .md desde docs/, terraform/, kubernetes/, etc.
 # Ver docker-compose.yml: context: . / dockerfile: app/frontend/Dockerfile
 
-FROM node:20-alpine AS builder
+FROM node:20-slim AS builder
 WORKDIR /workspace
 
 # Copiar archivos de documentacion que necesita el build de Vite (?raw imports)
@@ -17,6 +17,12 @@ COPY disaster-recovery/          disaster-recovery/
 # Instalar dependencias del frontend
 WORKDIR /workspace/app/frontend
 COPY app/frontend/package*.json ./
+
+# Fix: deshabilitar hardware AES (AES-NI) para evitar ERR_SSL_CIPHER_OPERATION_FAILED
+# en entornos virtualizados (WSL2/Docker Desktop) donde la aceleracion de hardware
+# puede no estar disponible correctamente
+ENV OPENSSL_ia32cap=~0x200000200000000
+
 RUN npm ci
 
 # Copiar codigo fuente del frontend
