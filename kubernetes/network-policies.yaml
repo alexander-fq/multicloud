@@ -1,0 +1,218 @@
+# ============================================================
+# KUBERNETES NETWORK POLICIES - Zero Trust Networking
+# ============================================================
+#
+# Que son las NetworkPolicies?
+# Son reglas de firewall a nivel de pod dentro de Kubernetes.
+# Por defecto, TODOS los pods pueden hablar entre si (muy inseguro).
+# Con NetworkPolicies establecemos: "deny all, then allow only what's needed".
+#
+# ARQUITECTURA DE CONFIANZA CERO (Zero Trust):
+# - Frontend puede hablar con Backend (para /api/*)
+# - Backend puede hablar con Database (para queries SQL)
+# - Database NO puede iniciar conexiones (solo recibir del backend)
+# - Ningun pod puede salir a internet directamente (solo via NAT)
+# - Nada de afuera puede entrar directo a los pods (solo via ALB/Ingress)
+# ============================================================
+
+---
+# ============================================================
+# POLITICA 1: DEFAULT DENY - Denegar TODO el trafico por defecto
+# Esta es la politica mas importante: establecer que nada pase
+# hasta que explicitamente lo permitamos
+# ============================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: govtech
+  labels:
+    app: govtech
+    security: network-policy
+spec:
+  podSelector: {}  # Aplica a TODOS los pods del namespace
+  policyTypes:
+    - Ingress   # Bloquea trafico entrante a todos los pods
+    - Egress    # Bloquea trafico saliente de todos los pods
+
+---
+# ============================================================
+# POLITICA 2: FRONTEND - Solo puede recibir trafico del ALB (Ingress)
+# El frontend (React/Nginx) solo debe recibir peticiones HTTP
+# que vienen del AWS Load Balancer, no de otros pods
+# ============================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: frontend-network-policy
+  namespace: govtech
+  labels:
+    app: govtech
+    component: frontend
+    security: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app: frontend  # Aplica solo a los pods del frontend
+
+  policyTypes:
+    - Ingress
+    - Egress
+
+  ingress:
+    # Permitir trafico HTTP desde el ALB (Ingress controller)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system  # Namespace del Ingress controller
+      ports:
+        - protocol: TCP
+          port: 80   # Puerto donde corre Nginx
+
+  egress:
+    # Frontend puede llamar al backend (para proxy de /api/*)
+    - to:
+        - podSelector:
+            matchLabels:
+              app: backend
+      ports:
+        - protocol: TCP
+          port: 3000  # Puerto del backend Node.js
+
+    # DNS: necesario para resolver nombres de dominio internos
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+
+---
+# ============================================================
+# POLITICA 3: BACKEND - Solo recibe del frontend, solo habla con DB
+# El backend (Node.js) es la capa de negocio.
+# Solo acepta peticiones del frontend y solo se conecta a la DB.
+# ============================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backend-network-policy
+  namespace: govtech
+  labels:
+    app: govtech
+    component: backend
+    security: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app: backend
+
+  policyTypes:
+    - Ingress
+    - Egress
+
+  ingress:
+    # Recibir peticiones del frontend
+    - from:
+        - podSelector:
+            matchLabels:
+              app: frontend
+      ports:
+        - protocol: TCP
+          port: 3000
+
+    # Recibir peticiones del Ingress Controller directamente (para /api/*)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: TCP
+          port: 3000
+
+  egress:
+    # Backend puede conectarse a la base de datos PostgreSQL
+    - to:
+        - podSelector:
+            matchLabels:
+              app: postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+
+    # Backend puede llamar a AWS APIs (Secrets Manager, S3, etc.)
+    # Solo HTTPS (443) hacia afuera (pasa por NAT Gateway)
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8    # Excluir IPs privadas (red interna)
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - protocol: TCP
+          port: 443
+
+    # DNS
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+
+---
+# ============================================================
+# POLITICA 4: DATABASE - Solo recibe del backend, no inicia conexiones
+# La base de datos PostgreSQL es el recurso mas sensible.
+# SOLO puede recibir conexiones del backend.
+# NO puede iniciar ninguna conexion hacia afuera.
+# ============================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: database-network-policy
+  namespace: govtech
+  labels:
+    app: govtech
+    component: database
+    security: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app: postgres
+
+  policyTypes:
+    - Ingress
+    - Egress
+
+  ingress:
+    # SOLO el backend puede conectarse a PostgreSQL
+    - from:
+        - podSelector:
+            matchLabels:
+              app: backend
+      ports:
+        - protocol: TCP
+          port: 5432
+
+  egress:
+    # La DB no necesita salir a ningun lado
+    # Solo DNS para resolver hostnames internos
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+
+# ============================================================
+# VERIFICACION:
+# kubectl get networkpolicies -n govtech
+# kubectl describe networkpolicy default-deny-all -n govtech
+#
+# Test de conectividad (debe fallar):
+# kubectl exec -it <pod-frontend> -n govtech -- curl postgres:5432
+# (el frontend NO debe poder llegar a la DB directamente)
+# ============================================================
