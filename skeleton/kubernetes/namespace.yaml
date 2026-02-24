@@ -1,0 +1,39 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: govtech
+  labels:
+    name: govtech
+    environment: production
+    managed-by: terraform
+
+    # ============================================================
+    # POD SECURITY STANDARDS (PSS)
+    # ============================================================
+    # Kubernetes tiene 3 niveles de seguridad para pods:
+    #
+    # - privileged: sin restricciones (solo para system pods)
+    # - baseline:   bloquea privilegios peligrosos (sin root, sin hostNetwork)
+    # - restricted: el mas seguro (sin root, readonly filesystem, sin caps)
+    #
+    # Se aplica en 3 modos:
+    # - enforce: rechaza pods que no cumplan (bloquea el deploy)
+    # - warn:    permite el pod pero muestra advertencia en kubectl
+    # - audit:   permite el pod y registra en logs de auditoria
+    #
+    # ESTRATEGIA: enforce=baseline (bloquea lo mas peligroso sin romper apps)
+    #             warn+audit=restricted (avisa sobre mejoras de seguridad adicionales)
+    # ============================================================
+
+    # ENFORCE baseline: pods que corran como root o usen hostNetwork son RECHAZADOS
+    pod-security.kubernetes.io/enforce: "baseline"
+    pod-security.kubernetes.io/enforce-version: "latest"
+
+    # WARN restricted: si el pod no cumple el nivel mas alto, muestra advertencia
+    # (no bloquea el deploy pero si avisa que hay mejoras posibles)
+    pod-security.kubernetes.io/warn: "restricted"
+    pod-security.kubernetes.io/warn-version: "latest"
+
+    # AUDIT restricted: registra en CloudTrail si el pod no cumple el nivel alto
+    pod-security.kubernetes.io/audit: "restricted"
+    pod-security.kubernetes.io/audit-version: "latest"

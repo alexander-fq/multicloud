@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+
+  # REEMPLAZAR: configura tu backend
+  backend:
+    build:
+      context: ./app/backend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      # REEMPLAZAR: elige tu proveedor cloud
+      - CLOUD_PROVIDER=aws
+      # AWS
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      # OCI (descomentar si usas OCI)
+      # - OCI_REGION=${OCI_REGION}
+      # - OCI_NAMESPACE=${OCI_NAMESPACE}
+      # GCP (descomentar si usas GCP)
+      # - GCP_PROJECT_ID=${GCP_PROJECT_ID}
+      # Azure (descomentar si usas Azure)
+      # - AZURE_TENANT_ID=${AZURE_TENANT_ID}
+      - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:password@db:5432/appdb}
+    depends_on:
+      - db
+    restart: unless-stopped
+
+  # REEMPLAZAR: configura tu frontend
+  frontend:
+    build:
+      context: ./app/frontend
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  # Base de datos local para desarrollo
+  # En produccion se usa RDS (AWS) / DB Service (OCI) / Cloud SQL (GCP)
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=appdb
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+volumes:
+  postgres_data:

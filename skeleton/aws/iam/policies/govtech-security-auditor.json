@@ -1,0 +1,66 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "CloudTrailReadOnly",
+      "Effect": "Allow",
+      "Action": [
+        "cloudtrail:GetTrail",
+        "cloudtrail:GetTrailStatus",
+        "cloudtrail:ListTrails",
+        "cloudtrail:LookupEvents",
+        "cloudtrail:GetEventSelectors",
+        "cloudtrail:DescribeTrails"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "SecurityHubReadOnly",
+      "Effect": "Allow",
+      "Action": [
+        "securityhub:GetFindings",
+        "securityhub:ListFindings",
+        "securityhub:GetInsights",
+        "securityhub:GetEnabledStandards",
+        "securityhub:DescribeHub",
+        "securityhub:DescribeStandards",
+        "securityhub:DescribeStandardsControls"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "GuardDutyReadOnly",
+      "Effect": "Allow",
+      "Action": [
+        "guardduty:GetDetector",
+        "guardduty:GetFindings",
+        "guardduty:ListDetectors",
+        "guardduty:ListFindings",
+        "guardduty:GetFindingsStatistics"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "IAMAccessAnalyzerReadOnly",
+      "Effect": "Allow",
+      "Action": [
+        "access-analyzer:ListAnalyzers",
+        "access-analyzer:GetAnalyzer",
+        "access-analyzer:ListFindings",
+        "access-analyzer:GetFinding"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ConfigReadOnly",
+      "Effect": "Allow",
+      "Action": [
+        "config:GetComplianceSummaryByConfigRule",
+        "config:GetComplianceDetailsByConfigRule",
+        "config:DescribeConfigRules",
+        "config:ListDiscoveredResources"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

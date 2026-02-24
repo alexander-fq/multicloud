@@ -1,0 +1,97 @@
+# ============================================================
+# POD DISRUPTION BUDGETS (PDB)
+# ============================================================
+#
+# Que es un PodDisruptionBudget?
+# Es una garantia de disponibilidad durante mantenimiento planificado.
+# Le dice a Kubernetes: "cuando hagas mantenimiento, no bajes mas
+# de X pods al mismo tiempo para que el servicio siga funcionando".
+#
+# Cuando se usa:
+# - Durante kubectl drain (evacuar un nodo para mantenimiento)
+# - Durante upgrades del cluster EKS
+# - Durante rebalanceo de pods entre nodos
+#
+# Sin PDB: Kubernetes podria bajar TODOS los pods a la vez
+# Con PDB: garantiza que siempre haya al menos N pods corriendo
+#
+# Complementa el HPA (que escala segun carga) con
+# garantias de disponibilidad durante operaciones de mantenimiento.
+# ============================================================
+
+---
+# ============================================================
+# PDB BACKEND: siempre al menos 1 replica disponible
+# El backend tiene minReplicas: 2 en el HPA
+# Con este PDB, durante mantenimiento Kubernetes no puede bajar
+# mas de 1 pod a la vez, garantizando que el otro siga activo
+# ============================================================
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: backend-pdb
+  namespace: govtech
+  labels:
+    app: govtech
+    component: backend
+spec:
+  # minAvailable: siempre debe haber al menos 1 pod del backend corriendo
+  # Alternativa: maxUnavailable: 1 (no mas de 1 pod caido a la vez)
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: backend
+
+---
+# ============================================================
+# PDB FRONTEND: siempre al menos 1 replica disponible
+# ============================================================
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: frontend-pdb
+  namespace: govtech
+  labels:
+    app: govtech
+    component: frontend
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: frontend
+
+---
+# ============================================================
+# PDB DATABASE: la DB es stateful, NO se puede interrumpir
+# El StatefulSet de PostgreSQL es un unico pod (sin replicas).
+# El PDB con minAvailable: 1 evita que Kubernetes lo mate
+# durante mantenimiento sin coordinacion explicita.
+# En produccion real: usar RDS (managed) en lugar de PostgreSQL en K8s
+# ============================================================
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: database-pdb
+  namespace: govtech
+  labels:
+    app: govtech
+    component: database
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: postgres
+
+# ============================================================
+# VERIFICACION:
+# kubectl get pdb -n govtech
+#
+# Output esperado:
+# NAME           MIN AVAILABLE   MAX UNAVAILABLE   ALLOWED DISRUPTIONS   AGE
+# backend-pdb    1               N/A               1                     5m
+# frontend-pdb   1               N/A               1                     5m
+# database-pdb   1               N/A               0                     5m
+#
+# "ALLOWED DISRUPTIONS: 0" en database significa que NO se puede
+# interrumpir en este momento (solo 1 replica corriendo)
+# ============================================================
