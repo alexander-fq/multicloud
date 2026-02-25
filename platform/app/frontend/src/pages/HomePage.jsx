@@ -8,7 +8,7 @@ function HomePage() {
       <div className="card bg-gradient-to-r from-blue-600 to-indigo-700 text-white">
         <p className="text-xs font-semibold uppercase tracking-widest text-blue-200 mb-3">GovTech Cloud Migration Platform</p>
         <h1 className="text-4xl font-bold mb-4 leading-tight">
-          Infraestructura cloud-agnostica para la transformacion digital del gobierno
+          Infraestructura cloud-agnostica para la transformacion digital de cualquier organizacion
         </h1>
         <p className="text-lg text-blue-100 mb-8 max-w-2xl">
           Migra entre proveedores cloud sin reescribir codigo. Todo el stack — aplicacion, infraestructura, seguridad y CI/CD — esta listo para produccion en AWS y es portable a cualquier proveedor.
