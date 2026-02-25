@@ -4,15 +4,23 @@ import rehypeHighlight from 'rehype-highlight'
 import MermaidDiagram from './MermaidDiagram'
 import { useEffect, useState, useRef } from 'react'
 
-// Genera id de heading igual que extractHeadings
+// Extrae texto plano de children de React (puede ser string, array o elemento)
+function getChildText(children) {
+  if (typeof children === 'string') return children
+  if (Array.isArray(children)) return children.map(getChildText).join('')
+  if (children?.props?.children) return getChildText(children.props.children)
+  return ''
+}
+
+// Genera id a partir de children (mismo algoritmo que extractHeadings)
 function headingId(children) {
-  const text = String(children).replace(/\*\*/g, '').trim()
+  const text = getChildText(children).replace(/\*\*/g, '').trim()
   return text.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-')
 }
 
-// Componentes de heading con id para que funcione la tabla de contenidos
+// Componentes de heading con id — node se descarta para no pasar prop invalido al DOM
 function makeHeading(Tag) {
-  return function Heading({ children, ...props }) {
+  return function Heading({ children, node, ...props }) {
     const id = headingId(children)
     return <Tag id={id} {...props}>{children}</Tag>
   }
@@ -70,29 +78,45 @@ export default function DocsContent({ doc }) {
   const [headings, setHeadings] = useState([])
   const [activeHeading, setActiveHeading] = useState('')
   const contentRef = useRef(null)
+  const scrollContainerRef = useRef(null)
 
   useEffect(() => {
     if (doc) {
       setHeadings(extractHeadings(doc.content))
       setActiveHeading('')
-      window.scrollTo({ top: 0, behavior: 'smooth' })
+      if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0
     }
   }, [doc])
 
-  // Track active heading on scroll
+  // Marca el heading visible en el sidebar derecho al hacer scroll
   useEffect(() => {
+    const container = scrollContainerRef.current
+    if (!container) return
     const observer = new IntersectionObserver(
       entries => {
         for (const entry of entries) {
           if (entry.isIntersecting) setActiveHeading(entry.target.id)
         }
       },
-      { rootMargin: '-80px 0px -70% 0px' }
+      { root: container, rootMargin: '-80px 0px -70% 0px' }
     )
     const els = contentRef.current?.querySelectorAll('h1, h2, h3') || []
     els.forEach(el => observer.observe(el))
     return () => observer.disconnect()
   }, [doc])
+
+  // Scroll al heading dentro del contenedor correcto
+  function scrollToHeading(id) {
+    const el = document.getElementById(id)
+    const container = scrollContainerRef.current
+    if (!el || !container) return
+    const containerRect = container.getBoundingClientRect()
+    const elRect = el.getBoundingClientRect()
+    container.scrollTo({
+      top: container.scrollTop + (elRect.top - containerRect.top) - 80,
+      behavior: 'smooth',
+    })
+  }
 
   if (!doc) {
     return (
@@ -112,7 +136,7 @@ export default function DocsContent({ doc }) {
   return (
     <div className="flex flex-1 min-h-0">
       {/* Main content */}
-      <div className="flex-1 overflow-y-auto">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto">
         <div ref={contentRef} className="max-w-3xl mx-auto px-8 py-8">
           {/* Breadcrumb */}
           <nav className="flex items-center gap-1.5 text-sm text-gray-500 mb-6">
@@ -161,9 +185,7 @@ export default function DocsContent({ doc }) {
               {headings.map((h, i) => (
                 <li key={i}>
                   <button
-                    onClick={() => {
-                      document.getElementById(h.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                    }}
+                    onClick={() => scrollToHeading(h.id)}
                     className={`block w-full text-left text-xs py-1 transition-colors hover:text-blue-600 ${
                       h.level === 1 ? 'font-medium' :
                       h.level === 2 ? 'pl-3 text-gray-600' :
