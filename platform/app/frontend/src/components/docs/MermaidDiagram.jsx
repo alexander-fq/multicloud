@@ -57,8 +57,8 @@ export default function MermaidDiagram({ code }) {
     return () => window.removeEventListener('keydown', h)
   }, [fullscreen])
 
-  const handleOpen  = () => { setZoom(3); setNaturalSize(null); setFullscreen(true) }
-  const handleClose = () => { setFullscreen(false); setZoom(3); setNaturalSize(null) }
+  const handleOpen  = () => { setZoom(1); setNaturalSize(null); setFullscreen(true) }
+  const handleClose = () => { setFullscreen(false); setZoom(1); setNaturalSize(null) }
   const zoomIn      = () => setZoom(z => Math.min(4,    +(z + 0.25).toFixed(2)))
   const zoomOut     = () => setZoom(z => Math.max(0.25, +(z - 0.25).toFixed(2)))
   const zoomReset   = () => setZoom(1)
@@ -89,7 +89,9 @@ export default function MermaidDiagram({ code }) {
     </div>
   )
 
-  // Dimensiones reales del SVG escalado — esto hace que el scroll funcione correctamente
+  // BASE_SCALE: tamaño visual base del diagrama en el modal (independiente del % que ve el usuario)
+  // zoom=1 se muestra como "100%" pero visualmente el diagrama ya es 3x su tamaño natural
+  const BASE_SCALE = 3
   const W = naturalSize?.width  || 900
   const H = naturalSize?.height || 500
 
@@ -172,14 +174,14 @@ export default function MermaidDiagram({ code }) {
                   - La celda interior usa transform:scale para el zoom visual
                     → el diagrama se ve grande sin que el navegador haga scroll de la pagina
                 */}
-                <div style={{ display: 'grid', width: `${W * zoom}px`, height: `${H * zoom}px` }}>
-                  {/* celda de layout — define el area de scroll */}
-                  <div style={{ gridArea: '1/1', width: `${W * zoom}px`, height: `${H * zoom}px` }} />
-                  {/* celda visual — aplica el zoom al diagrama */}
+                <div style={{ display: 'grid', width: `${W * BASE_SCALE * zoom}px`, height: `${H * BASE_SCALE * zoom}px` }}>
+                  {/* celda de layout — define el area de scroll real */}
+                  <div style={{ gridArea: '1/1', width: `${W * BASE_SCALE * zoom}px`, height: `${H * BASE_SCALE * zoom}px` }} />
+                  {/* celda visual — aplica base + zoom al diagrama */}
                   <div
                     style={{
                       gridArea: '1/1',
-                      transform: `scale(${zoom})`,
+                      transform: `scale(${BASE_SCALE * zoom})`,
                       transformOrigin: 'top left',
                       width: `${W}px`,
                       height: `${H}px`,
