@@ -10,7 +10,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Instalamos TODAS las dependencias (incluyendo devDependencies)
-RUN npm ci
+RUN npm install
 
 # Copiamos el resto del codigo fuente
 COPY . .
@@ -44,7 +44,7 @@ COPY --chown=nodejs:nodejs package*.json ./
 # Instalamos SOLO dependencias de produccion (sin devDependencies)
 # Corremos como nodejs para que los archivos ya tengan el owner correcto
 USER nodejs
-RUN npm ci --omit=dev && \
+RUN npm install --omit=dev && \
     npm cache clean --force
 
 # Copiamos el codigo desde el stage builder con el owner correcto
