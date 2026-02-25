@@ -57,8 +57,8 @@ export default function MermaidDiagram({ code }) {
     return () => window.removeEventListener('keydown', h)
   }, [fullscreen])
 
-  const handleOpen  = () => { setZoom(1); setNaturalSize(null); setFullscreen(true) }
-  const handleClose = () => { setFullscreen(false); setZoom(1); setNaturalSize(null) }
+  const handleOpen  = () => { setZoom(3); setNaturalSize(null); setFullscreen(true) }
+  const handleClose = () => { setFullscreen(false); setZoom(3); setNaturalSize(null) }
   const zoomIn      = () => setZoom(z => Math.min(4,    +(z + 0.25).toFixed(2)))
   const zoomOut     = () => setZoom(z => Math.max(0.25, +(z - 0.25).toFixed(2)))
   const zoomReset   = () => setZoom(1)
