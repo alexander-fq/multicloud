@@ -4,6 +4,20 @@ import rehypeHighlight from 'rehype-highlight'
 import MermaidDiagram from './MermaidDiagram'
 import { useEffect, useState, useRef } from 'react'
 
+// Genera id de heading igual que extractHeadings
+function headingId(children) {
+  const text = String(children).replace(/\*\*/g, '').trim()
+  return text.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-')
+}
+
+// Componentes de heading con id para que funcione la tabla de contenidos
+function makeHeading(Tag) {
+  return function Heading({ children, ...props }) {
+    const id = headingId(children)
+    return <Tag id={id} {...props}>{children}</Tag>
+  }
+}
+
 // Componente personalizado para bloques de codigo
 function CodeBlock({ node, inline, className, children, ...props }) {
   const match  = /language-(\w+)/.exec(className || '')
@@ -118,7 +132,12 @@ export default function DocsContent({ doc }) {
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               rehypePlugins={[rehypeHighlight]}
-              components={{ code: CodeBlock }}
+              components={{
+                code: CodeBlock,
+                h1: makeHeading('h1'),
+                h2: makeHeading('h2'),
+                h3: makeHeading('h3'),
+              }}
             >
               {doc.content}
             </ReactMarkdown>
@@ -141,16 +160,18 @@ export default function DocsContent({ doc }) {
             <ul className="space-y-1">
               {headings.map((h, i) => (
                 <li key={i}>
-                  <a
-                    href={`#${h.id}`}
-                    className={`block text-xs py-1 transition-colors hover:text-blue-600 ${
+                  <button
+                    onClick={() => {
+                      document.getElementById(h.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                    }}
+                    className={`block w-full text-left text-xs py-1 transition-colors hover:text-blue-600 ${
                       h.level === 1 ? 'font-medium' :
                       h.level === 2 ? 'pl-3 text-gray-600' :
                       'pl-6 text-gray-500'
                     } ${activeHeading === h.id ? 'text-blue-600 font-medium' : 'text-gray-500'}`}
                   >
                     {h.text}
-                  </a>
+                  </button>
                 </li>
               ))}
             </ul>
