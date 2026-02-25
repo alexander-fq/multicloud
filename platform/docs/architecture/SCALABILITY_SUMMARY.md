@@ -2,27 +2,27 @@
 
 ## The Big Question
 
-> **"Can our architecture handle a small government (1M citizens) AND scale to a large government (100M citizens)?"**
+> **"Can our architecture handle a small organization (1M users) AND scale to a large organization (100M users)?"**
 
 **Answer: YES** 
 
 ---
 
-## Real Government Data
+## Real-World Scale References
 
-| Government | Citizens | Daily Transactions | Our Architecture |
-|------------|----------|-------------------|------------------|
-| **Estonia** | 1.3M | 200K/day | Works out-of-box |
-| **Colombia** | 50M | 2M/day | Add replicas (2 weeks) |
-| **UK** | 67M | 8M/day | Add sharding (2 months) |
-| **India** | 1.4B | 15M/day | Multi-region (6 months) |
+| Organization | Users | Daily Transactions | Our Architecture |
+|--------------|-------|-------------------|------------------|
+| **Estonia e-Gov** | 1.3M | 200K/day | Works out-of-box |
+| **Colombia GOV.CO** | 50M | 2M/day | Add replicas (2 weeks) |
+| **UK gov.uk** | 67M | 8M/day | Add sharding (2 months) |
+| **India DigiLocker** | 1.4B | 15M/day | Multi-region (6 months) |
 
 ---
 
 ## Scaling Path
 
 ```
-Small Gov (1-2M) Medium Gov (2-20M) Large Gov (20M+)
+Small Scale (1-2M) Medium Scale (2-20M) Large Scale (20M+)
 
 Current +2wks + Read Replicas +2mo + Sharding 
 Architecture + Redis Cache + Multi-region 
@@ -69,14 +69,14 @@ provider = "gcp" # Week 5: Migrate to GCP
 
 ---
 
-## Real Cost Comparison (50M Citizens Example)
+## Real Cost Comparison (50M Users Example)
 
-### Traditional Government IT Contract
+### Traditional Enterprise IT Contract
 ```
 Initial Setup: $5M
 Annual License: $10M/year
 5-Year Total: $55M
-Cost per citizen: $1.10/year
+Cost per user: $1.10/year
 Migration: 2-5 years
 ```
 
@@ -85,7 +85,7 @@ Migration: 2-5 years
 Initial Setup: $0 (open source)
 Annual Infrastructure: $400K/year (AWS)
 5-Year Total: $2M
-Cost per citizen: $0.04/year
+Cost per user: $0.04/year
 Migration: 2-3 months
 ```
 
@@ -114,7 +114,7 @@ Migration: 2-3 months
 
 | Metric | Small | Medium | Large |
 |--------|-------|--------|-------|
-| **Population** | 1-2M | 2-20M | 20M+ |
+| **Users** | 1-2M | 2-20M | 20M+ |
 | **Transactions/day** | 50K | 500K | 2M+ |
 | **Database Size** | 50GB | 500GB | 5TB+ |
 | **Migration Time** | 2 weeks | 4 weeks | 8-12 weeks |
@@ -145,8 +145,8 @@ Migration: 2-3 months
 
 **Answer:**
 1. **Portable** - Works on AWS, GCP, Azure, OCI, on-premise (Terraform + Kubernetes)
-2. **Scalable** - Handles 1M to 100M+ citizens (documented scaling path)
+2. **Scalable** - Handles 1M to 100M+ users (documented scaling path)
 3. **Fast Migration** - 2 weeks to 3 months (not 2-5 years)
 4. **Cost Effective** - 96-98% cheaper than traditional vendors
 
-**This is not a demo. This is a product governments can actually use.**
+**This is not a demo. This is a product organizations can actually use.**

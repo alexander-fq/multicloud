@@ -1,24 +1,24 @@
 # Diagramas de Arquitectura - GovTech Cloud Migration Platform
 
 > **Enfoque:** Arquitectura hibrida con AWS como nube principal e integracion con
-> infraestructura on-premise del gobierno. El diseno es cloud-agnostic en la capa
+> infraestructura on-premise del cliente. El diseno es cloud-agnostic en la capa
 > de aplicacion (Kubernetes) para permitir portabilidad futura a otros proveedores.
 
 ---
 
 ## 1. Arquitectura Hibrida (On-Premise + AWS Cloud)
 
-Este diagrama muestra el escenario real de un gobierno: sistemas legacy en datacenter
+Este diagrama muestra el escenario de una organizacion: sistemas legacy en datacenter
 propio que se integran con nuevos servicios en AWS. La migracion es gradual, no total.
 
 ```mermaid
 graph TB
-    subgraph CIUDADANOS["Ciudadanos / Internet"]
+    subgraph USUARIOS["Usuarios / Internet"]
         USER[Navegador]
         MOBILE[App Movil]
     end
 
-    subgraph ONPREMISE["Datacenter del Gobierno (On-Premise)"]
+    subgraph ONPREMISE["Datacenter del Cliente (On-Premise)"]
         direction TB
         LEGACY_DB[(Base de datos\nlegacy Oracle/SQL)]
         LEGACY_APP[Sistemas\nlegacy Java/COBOL]
@@ -63,12 +63,12 @@ graph TB
 
     style ONPREMISE fill:#e8e8e8,stroke:#666
     style AWS fill:#fff8e1,stroke:#ff9900
-    style CIUDADANOS fill:#e3f2fd,stroke:#1565c0
+    style USUARIOS fill:#e3f2fd,stroke:#1565c0
 ```
 
 **Por que hibrido y no 100% cloud:**
-- Los gobiernos tienen sistemas legacy de decadas que no pueden migrarse de golpe
-- Algunas regulaciones exigen que ciertos datos permanezcan en territorio nacional (datacenter propio)
+- Las organizaciones tienen sistemas legacy de decadas que no pueden migrarse de golpe
+- Algunas regulaciones exigen que ciertos datos permanezcan en la infraestructura propia
 - La migracion gradual reduce el riesgo operativo
 - Direct Connect da conectividad privada (no pasa por internet publico)
 
@@ -103,7 +103,7 @@ graph TB
         SYNC[Servicio de\nReplicacion\nde datos]
     end
 
-    USER[Ciudadano] -->|govtech.gob.co| R53
+    USER[Usuario] -->|app.ejemplo.com| R53
     R53 -->|Healthy: 80%| ALB_AWS
     R53 -->|Failover / 20%| LB_GCP
     ALB_AWS --> EKS_AWS --> RDS_AWS
@@ -133,7 +133,7 @@ graph TB
 ```mermaid
 graph TB
     subgraph Internet
-        USER[Ciudadano / Navegador]
+        USER[Usuario / Navegador]
         ADMIN[Administrador]
     end
 

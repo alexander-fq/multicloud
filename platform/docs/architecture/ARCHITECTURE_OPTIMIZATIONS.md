@@ -24,7 +24,7 @@ Current: Every request hits database
 After: Redis cache (in-memory) → 10-50ms response vs 200ms
 
 Example:
-- "Get all trámites" query: 200ms → 15ms (13x faster)
+- "Get all migrations" query: 200ms → 15ms (13x faster)
 - Database connections: 1000/sec → 200/sec (80% reduction)
 ```
 

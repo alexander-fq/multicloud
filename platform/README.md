@@ -2,9 +2,11 @@
 
 > Multi-cloud backend architecture enabling seamless cloud provider switching in 2-3 weeks instead of 6+ months.
 
+**Live Demo:** http://3.237.42.230
+
 ## Overview
 
-A production-ready platform that allows governments to migrate between cloud providers (AWS, OCI, GCP, Azure) without rewriting code. Built with interface-based abstraction and factory pattern for true cloud-agnostic architecture.
+A production-ready platform that allows organizations to migrate between cloud providers (AWS, OCI, GCP, Azure) without rewriting code. Built with interface-based abstraction and factory pattern for true cloud-agnostic architecture.
 
 ### Key Features
 
@@ -141,16 +143,16 @@ Base URL: `http://localhost:3000`
 
 | Component | AWS | OCI | GCP | Azure |
 |-----------|-----|-----|-----|-------|
-| Storage |  Implemented | ‹ Structured | ‹ Structured | ‹ Structured |
-| Database |  Implemented | ‹ Structured | ‹ Structured | ‹ Structured |
-| Monitoring |  Implemented | ‹ Structured | ‹ Structured | ‹ Structured |
-| Auth |  Implemented | ‹ Structured | ‹ Structured | ‹ Structured |
+| Storage |  Implemented | ï¿½ Structured | ï¿½ Structured | ï¿½ Structured |
+| Database |  Implemented | ï¿½ Structured | ï¿½ Structured | ï¿½ Structured |
+| Monitoring |  Implemented | ï¿½ Structured | ï¿½ Structured | ï¿½ Structured |
+| Auth |  Implemented | ï¿½ Structured | ï¿½ Structured | ï¿½ Structured |
 | Factory |  Complete |  Complete |  Complete |  Complete |
 | Interfaces |  Complete |  Complete |  Complete |  Complete |
 
 **Legend:**
 -  Fully implemented and working
-- ‹ Structure ready, implementation pending (3-4 days each)
+- ï¿½ Structure ready, implementation pending (3-4 days each)
 
 ## Project Structure
 
@@ -211,14 +213,14 @@ aws_cloud/
 
 ## Scalability
 
-Our architecture scales from small governments (1M citizens) to large nations (100M+):
+Our architecture scales from small organizations (1M users) to large enterprises (100M+):
 
-| Government | Citizens | Daily Transactions | Architecture | Migration Time |
-|------------|----------|-------------------|--------------|----------------|
-| Estonia | 1.3M | 200K/day | Current setup | Ready |
-| Colombia | 50M | 2M/day | + Read replicas | 2 weeks |
-| UK | 67M | 8M/day | + Sharding | 2 months |
-| India | 1.4B | 15M/day | + Multi-region | 6 months |
+| Scale Reference | Users | Daily Transactions | Architecture | Migration Time |
+|-----------------|-------|-------------------|--------------|----------------|
+| Estonia e-Gov | 1.3M | 200K/day | Current setup | Ready |
+| Colombia GOV.CO | 50M | 2M/day | + Read replicas | 2 weeks |
+| UK gov.uk | 67M | 8M/day | + Sharding | 2 months |
+| India DigiLocker | 1.4B | 15M/day | + Multi-region | 6 months |
 
 See [docs/SCALABILITY_SUMMARY.md](docs/SCALABILITY_SUMMARY.md) for details.
 
@@ -455,6 +457,6 @@ MIT License - See LICENSE file for details
 
 ---
 
-**Built for government digital transformation.**
+**Built for cloud-agnostic digital transformation.**
 
 Platform Status: Production-ready for AWS | Multi-cloud expansion in progress
